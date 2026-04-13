@@ -1,0 +1,3774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Meter Forensic Analysis</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* ─── DESIGN SYSTEM: Custom Properties ─────────────────────── */
+    :root {
+      --color-bg:             #0f1117;
+      --color-surface:        #161b22;
+      --color-surface-2:      #1c2128;
+      --color-surface-offset: #21262d;
+      --color-border:         #30363d;
+      --color-divider:        #21262d;
+
+      --color-text:           #e6edf3;
+      --color-text-muted:     #8b949e;
+      --color-text-faint:     #484f58;
+
+      /* Semantic Risk Colors */
+      --color-critical:       #f85149;
+      --color-critical-bg:    rgba(248, 81, 73, 0.1);
+      --color-critical-border: rgba(248, 81, 73, 0.3);
+
+      --color-high:           #e3b341;
+      --color-high-bg:        rgba(227, 179, 65, 0.1);
+      --color-high-border:    rgba(227, 179, 65, 0.3);
+
+      --color-medium:         #d29922;
+      --color-medium-bg:      rgba(210, 153, 34, 0.08);
+      --color-medium-border:  rgba(210, 153, 34, 0.3);
+
+      --color-low:            #3fb950;
+      --color-low-bg:         rgba(63, 185, 80, 0.1);
+      --color-low-border:     rgba(63, 185, 80, 0.3);
+
+      --color-info:           #58a6ff;
+      --color-info-bg:        rgba(88, 166, 255, 0.08);
+      --color-info-border:    rgba(88, 166, 255, 0.25);
+
+      --color-primary:        #238636;
+      --color-primary-hover:  #2ea043;
+
+      /* Spacing */
+      --space-1: 0.25rem; --space-2: 0.5rem;  --space-3: 0.75rem;
+      --space-4: 1rem;    --space-6: 1.5rem;  --space-8: 2rem;
+      --space-12: 3rem;   --space-16: 4rem;
+
+      /* Typography */
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --text-xs:   clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      --text-sm:   clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+      --text-lg:   clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      --text-xl:   clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+
+      --radius-sm: 4px;  --radius-md: 8px;
+      --radius-lg: 12px; --radius-xl: 16px;
+
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.6);
+
+      --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ─── RESET & BASE ─────────────────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      font-weight: 400;
+      line-height: 1.6;
+      color: var(--color-text);
+      background: var(--color-bg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─── TYPOGRAPHY ───────────────────────────────────────────── */
+    h1, h2, h3, h4 {
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    h1 { font-size: var(--text-xl); }
+    h2 { font-size: var(--text-lg); }
+    h3 { font-size: var(--text-base); font-weight: 600; }
+
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    .text-muted {
+      color: var(--color-text-muted);
+    }
+
+    .text-faint {
+      color: var(--color-text-faint);
+    }
+
+    .text-xs { font-size: var(--text-xs); }
+    .text-sm { font-size: var(--text-sm); }
+
+    /* ─── LAYOUT UTILITIES ─────────────────────────────────────── */
+    .container {
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 var(--space-4);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-1 { gap: var(--space-1); }
+    .gap-2 { gap: var(--space-2); }
+    .gap-3 { gap: var(--space-3); }
+    .gap-4 { gap: var(--space-4); }
+    .gap-6 { gap: var(--space-6); }
+    .gap-8 { gap: var(--space-8); }
+    .flex-wrap { flex-wrap: wrap; }
+
+    /* ─── HEADER ───────────────────────────────────────────────── */
+    .app-header {
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      padding: var(--space-4) 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .app-header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .app-logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .app-logo-icon {
+      width: 36px;
+      height: 36px;
+      color: var(--color-info);
+    }
+
+    .app-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--color-info), var(--color-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .app-subtitle {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-text-muted);
+      padding: var(--space-2);
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+    }
+
+    .btn-icon:hover {
+      color: var(--color-text);
+      border-color: var(--color-text-muted);
+      background: var(--color-surface-offset);
+    }
+
+    .btn-icon:focus-visible {
+      outline: 2px solid var(--color-info);
+      outline-offset: 2px;
+    }
+
+    /* ─── UPLOAD ZONE ──────────────────────────────────────────── */
+    .upload-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 80px);
+      padding: var(--space-8);
+    }
+
+    .upload-dropzone {
+      width: 100%;
+      max-width: 560px;
+      border: 2px dashed var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-16) var(--space-8);
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      background: var(--color-surface);
+    }
+
+    .upload-dropzone:hover,
+    .upload-dropzone.drag-over {
+      border-color: var(--color-info);
+      background: var(--color-info-bg);
+    }
+
+    .upload-dropzone.drag-over {
+      transform: scale(1.02);
+    }
+
+    .upload-icon {
+      width: 64px;
+      height: 64px;
+      color: var(--color-text-faint);
+      margin-bottom: var(--space-6);
+      transition: color var(--transition);
+    }
+
+    .upload-dropzone:hover .upload-icon {
+      color: var(--color-info);
+    }
+
+    .upload-title {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      margin-bottom: var(--space-2);
+    }
+
+    .upload-subtitle {
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-4);
+    }
+
+    .upload-hint {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+      font-family: var(--font-mono);
+    }
+
+    .upload-input {
+      display: none;
+    }
+
+    .upload-spinner {
+      display: none;
+      margin-top: var(--space-4);
+    }
+
+    .upload-spinner.active {
+      display: block;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--color-border);
+      border-top-color: var(--color-info);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ─── ERROR CARD ───────────────────────────────────────────── */
+    .error-card {
+      background: var(--color-critical-bg);
+      border: 1px solid var(--color-critical-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4) var(--space-6);
+      margin-top: var(--space-4);
+      max-width: 560px;
+      width: 100%;
+    }
+
+    .error-card-title {
+      color: var(--color-critical);
+      font-weight: 600;
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-2);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .error-card-message {
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+    }
+
+    /* ─── INFO BANNER ──────────────────────────────────────────── */
+    .info-banner {
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-sm);
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+    }
+
+    .info-banner--warning {
+      background: var(--color-high-bg);
+      border: 1px solid var(--color-high-border);
+      color: var(--color-high);
+    }
+
+    .info-banner--info {
+      background: var(--color-info-bg);
+      border: 1px solid var(--color-info-border);
+      color: var(--color-info);
+    }
+
+    /* ─── REPORT CONTAINER ─────────────────────────────────────── */
+    #report-container {
+      padding-bottom: var(--space-16);
+    }
+
+    .report-section {
+      margin-bottom: var(--space-8);
+    }
+
+    .report-enter {
+      animation: fadeSlideUp 0.5s ease-out;
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ─── METER IDENTITY CARD ──────────────────────────────────── */
+    .meter-identity {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .identity-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .identity-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 500;
+    }
+
+    .identity-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    /* ─── RISK SCORE BANNER ────────────────────────────────────── */
+    .risk-banner {
+      border-radius: var(--radius-lg);
+      padding: var(--space-6) var(--space-8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-4);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .risk-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.05;
+      background: radial-gradient(ellipse at center, currentColor, transparent 70%);
+    }
+
+    .risk-level-critical {
+      background: var(--color-critical-bg);
+      border: 1px solid var(--color-critical-border);
+      color: var(--color-critical);
+    }
+
+    .risk-level-high {
+      background: var(--color-high-bg);
+      border: 1px solid var(--color-high-border);
+      color: var(--color-high);
+    }
+
+    .risk-level-medium {
+      background: var(--color-medium-bg);
+      border: 1px solid var(--color-medium-border);
+      color: var(--color-medium);
+    }
+
+    .risk-level-low {
+      background: var(--color-low-bg);
+      border: 1px solid var(--color-low-border);
+      color: var(--color-low);
+    }
+
+    .risk-score-display {
+      display: flex;
+      align-items: center;
+      gap: var(--space-6);
+    }
+
+    .risk-score-circle {
+      position: relative;
+      width: 100px;
+      height: 100px;
+    }
+
+    .risk-score-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .risk-score-track {
+      fill: none;
+      stroke: var(--color-surface-offset);
+      stroke-width: 6;
+    }
+
+    .risk-score-fill {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 283;
+      stroke-dashoffset: 283;
+      transition: stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .risk-score-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .score-number {
+      font-family: var(--font-mono);
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .score-max {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .risk-label {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .risk-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      justify-content: center;
+    }
+
+    .risk-recommendation {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      max-width: 600px;
+    }
+
+    /* ─── BADGES ───────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      min-height: 28px;
+    }
+
+    .badge-critical {
+      background: var(--color-critical-bg);
+      border: 1px solid var(--color-critical-border);
+      color: var(--color-critical);
+    }
+
+    .badge-high {
+      background: var(--color-high-bg);
+      border: 1px solid var(--color-high-border);
+      color: var(--color-high);
+    }
+
+    .badge-medium {
+      background: var(--color-medium-bg);
+      border: 1px solid var(--color-medium-border);
+      color: var(--color-medium);
+    }
+
+    .badge-low {
+      background: var(--color-low-bg);
+      border: 1px solid var(--color-low-border);
+      color: var(--color-low);
+    }
+
+    .badge-info {
+      background: var(--color-info-bg);
+      border: 1px solid var(--color-info-border);
+      color: var(--color-info);
+    }
+
+    /* ─── KPI CARDS ────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .kpi-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4) var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      transition: border-color var(--transition);
+    }
+
+    .kpi-card:hover {
+      border-color: var(--color-text-faint);
+    }
+
+    .kpi-card--critical {
+      border-color: var(--color-critical-border);
+    }
+
+    .kpi-card--warning {
+      border-color: var(--color-high-border);
+    }
+
+    .kpi-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .kpi-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-lg);
+      font-weight: 600;
+    }
+
+    .kpi-sub {
+      font-size: var(--text-xs);
+      color: var(--color-text-faint);
+    }
+
+    .kpi-value--critical { color: var(--color-critical); }
+    .kpi-value--high { color: var(--color-high); }
+    .kpi-value--low { color: var(--color-low); }
+    .kpi-value--info { color: var(--color-info); }
+
+    /* ─── SECTION TABS ─────────────────────────────────────────── */
+    .section-tabs {
+      display: flex;
+      gap: var(--space-1);
+      border-bottom: 1px solid var(--color-border);
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .section-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--color-text-muted);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      padding: var(--space-3) var(--space-4);
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: all var(--transition);
+      min-height: 44px;
+    }
+
+    .tab-btn:hover {
+      color: var(--color-text);
+      background: var(--color-surface-offset);
+    }
+
+    .tab-btn:focus-visible {
+      outline: 2px solid var(--color-info);
+      outline-offset: -2px;
+    }
+
+    .tab-btn.active {
+      color: var(--color-info);
+      border-bottom-color: var(--color-info);
+    }
+
+    .tab-panel {
+      display: none;
+      padding-top: var(--space-6);
+    }
+
+    .tab-panel.active {
+      display: block;
+      animation: fadeSlideUp 0.3s ease-out;
+    }
+
+    /* ─── CARD / PANEL ─────────────────────────────────────────── */
+    .card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: var(--space-4) var(--space-6);
+      border-bottom: 1px solid var(--color-divider);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .card-body {
+      padding: var(--space-4) var(--space-6);
+    }
+
+    .card-body--flush {
+      padding: 0;
+    }
+
+    /* ─── EXECUTIVE SUMMARY ────────────────────────────────────── */
+    .executive-summary {
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      line-height: 1.7;
+      font-size: var(--text-sm);
+    }
+
+    .executive-summary strong {
+      color: var(--color-text);
+    }
+
+    /* ─── DATA TABLES ──────────────────────────────────────────── */
+    .data-table-wrap {
+      overflow-x: auto;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--text-sm);
+    }
+
+    .data-table th {
+      text-align: left;
+      padding: var(--space-3) var(--space-4);
+      color: var(--color-text-muted);
+      font-weight: 500;
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--color-border);
+      white-space: nowrap;
+      background: var(--color-surface-offset);
+      position: sticky;
+      top: 0;
+    }
+
+    .data-table td {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-divider);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--color-surface-offset);
+    }
+
+    .data-table td.text-col {
+      font-family: var(--font-body);
+      max-width: 300px;
+    }
+
+    /* Findings table severity cell */
+    .finding-row--critical td:first-child { border-left: 3px solid var(--color-critical); }
+    .finding-row--high td:first-child     { border-left: 3px solid var(--color-high); }
+    .finding-row--medium td:first-child   { border-left: 3px solid var(--color-medium); }
+    .finding-row--low td:first-child      { border-left: 3px solid var(--color-low); }
+    .finding-row--info td:first-child     { border-left: 3px solid var(--color-info); }
+
+    /* ─── CHART CONTAINERS ─────────────────────────────────────── */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 320px;
+    }
+
+    .chart-container--tall {
+      height: 420px;
+    }
+
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* ─── LOAD HEATMAP (CSS Grid) ──────────────────────────────── */
+    .heatmap-container {
+      overflow-x: auto;
+      padding: var(--space-4);
+    }
+
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: 90px repeat(48, minmax(16px, 1fr));
+      gap: 1px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+    }
+
+    .heatmap-header {
+      color: var(--color-text-faint);
+      text-align: center;
+      padding: var(--space-1) 0;
+      font-size: 9px;
+    }
+
+    .heatmap-row-label {
+      color: var(--color-text-muted);
+      display: flex;
+      align-items: center;
+      padding-right: var(--space-2);
+      font-size: 10px;
+    }
+
+    .heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: 2px;
+      min-width: 14px;
+      min-height: 14px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .heatmap-cell:hover {
+      transform: scale(1.4);
+      z-index: 1;
+    }
+
+    .heatmap-legend {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .heatmap-legend-bar {
+      width: 120px;
+      height: 10px;
+      border-radius: 4px;
+      background: linear-gradient(to right, var(--color-surface-offset), #58a6ff);
+    }
+
+    /* ─── KEY STATS ROW ────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .stat-item {
+      padding: var(--space-3);
+      background: var(--color-surface-offset);
+      border-radius: var(--radius-md);
+    }
+
+    .stat-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      margin-bottom: var(--space-1);
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-base);
+      font-weight: 600;
+    }
+
+    /* ─── COLLAPSIBLE SECTIONS (Raw Findings) ──────────────────── */
+    .collapsible {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--space-2);
+      overflow: hidden;
+    }
+
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      cursor: pointer;
+      background: var(--color-surface-offset);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      user-select: none;
+      min-height: 44px;
+    }
+
+    .collapsible-header:hover {
+      background: var(--color-surface-2);
+    }
+
+    .collapsible-header .chevron {
+      transition: transform var(--transition);
+      width: 16px;
+      height: 16px;
+      color: var(--color-text-muted);
+    }
+
+    .collapsible.open .collapsible-header .chevron {
+      transform: rotate(90deg);
+    }
+
+    .collapsible-body {
+      display: none;
+      padding: var(--space-4);
+      background: var(--color-surface);
+    }
+
+    .collapsible.open .collapsible-body {
+      display: block;
+    }
+
+    .raw-json {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--color-text-muted);
+      max-height: 400px;
+      overflow-y: auto;
+      line-height: 1.8;
+    }
+
+    /* ─── BUTTONS ──────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      padding: var(--space-3) var(--space-6);
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all var(--transition);
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-primary-hover);
+    }
+
+    .btn-primary:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .btn-secondary {
+      background: var(--color-surface-offset);
+      border-color: var(--color-border);
+      color: var(--color-text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--color-surface-2);
+      border-color: var(--color-text-faint);
+    }
+
+    .btn-sm {
+      padding: var(--space-1) var(--space-3);
+      font-size: var(--text-xs);
+      min-height: 32px;
+    }
+
+    /* ─── DOWNLOAD SECTION ─────────────────────────────────────── */
+    .download-section {
+      text-align: center;
+      padding: var(--space-8) 0 var(--space-12);
+    }
+
+    /* ─── METRIC TOOLTIPS ──────────────────────────────────────── */
+    .has-tooltip {
+      position: relative;
+      cursor: help;
+    }
+
+    .has-tooltip .metric-tip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-xs);
+      font-family: var(--font-body);
+      font-weight: 400;
+      color: var(--color-text-muted);
+      white-space: normal;
+      width: max-content;
+      max-width: 280px;
+      line-height: 1.6;
+      z-index: 200;
+      box-shadow: var(--shadow-lg);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .has-tooltip .metric-tip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--color-border);
+    }
+
+    .has-tooltip:hover .metric-tip,
+    .has-tooltip:focus-within .metric-tip {
+      opacity: 1;
+    }
+
+    .kpi-card .has-tooltip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .tip-icon {
+      width: 13px;
+      height: 13px;
+      color: var(--color-text-faint);
+      flex-shrink: 0;
+    }
+
+    .identity-item .has-tooltip .metric-tip {
+      left: 0;
+      transform: none;
+    }
+
+    .identity-item .has-tooltip .metric-tip::after {
+      left: 16px;
+    }
+
+    /* ─── TOOLTIP (for heatmap) ────────────────────────────────── */
+    .tooltip {
+      position: fixed;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-xs);
+      font-family: var(--font-mono);
+      color: var(--color-text);
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .tooltip.visible {
+      opacity: 1;
+    }
+
+    /* ─── RESPONSIVE ───────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .meter-identity {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .risk-score-display {
+        flex-direction: column;
+      }
+
+      .risk-banner {
+        padding: var(--space-4);
+      }
+
+      .card-body {
+        padding: var(--space-3);
+      }
+
+      .app-subtitle {
+        display: none;
+      }
+
+      .section-tabs {
+        gap: 0;
+      }
+
+      .tab-btn {
+        padding: var(--space-3) var(--space-3);
+        font-size: var(--text-xs);
+      }
+
+      .chart-container {
+        height: 260px;
+      }
+    }
+
+    @media (max-width: 375px) {
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ─── SCROLLBAR STYLING ────────────────────────────────────── */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--color-bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-surface-offset);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-text-faint);
+    }
+
+    /* ─── PRINT ────────────────────────────────────────────────── */
+    @media print {
+      body { background: #fff; color: #000; }
+      .app-header, .upload-zone, .download-section { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── HEADER ─────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="container">
+      <div class="app-logo">
+        <i data-lucide="zap" class="app-logo-icon"></i>
+        <div>
+          <div class="app-title">Meter Forensic Analyzer</div>
+          <div class="app-subtitle">Smart Meter Health &amp; Theft Risk Assessment</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-icon" id="btn-new-file" title="Upload new file" aria-label="Upload new file">
+          <i data-lucide="upload" style="width:20px;height:20px;"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── UPLOAD ZONE ────────────────────────────────────────── -->
+  <main id="upload-zone" class="upload-zone">
+    <div class="upload-dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload meter JSON file">
+      <i data-lucide="file-json" class="upload-icon"></i>
+      <div class="upload-title">Upload Meter Data</div>
+      <div class="upload-subtitle">Drag &amp; drop your smart meter JSON file here, or click to browse</div>
+      <div class="upload-hint">.json format only</div>
+      <input type="file" accept=".json,application/json" class="upload-input" id="file-input">
+    </div>
+    <div class="upload-spinner" id="upload-spinner">
+      <div class="spinner"></div>
+      <p class="text-muted text-sm" style="text-align:center;margin-top:var(--space-2);">Analyzing meter data…</p>
+    </div>
+    <div id="upload-error" class="hidden"></div>
+  </main>
+
+  <!-- ─── REPORT (hidden until file loaded) ──────────────────── -->
+  <section id="report-container" class="container hidden">
+
+    <!-- Meter Identity Card -->
+    <div class="report-section report-enter">
+      <div class="meter-identity" id="meter-identity">
+        <!-- JS-rendered identity items -->
+      </div>
+    </div>
+
+    <!-- Risk Score Banner -->
+    <div class="report-section report-enter" id="risk-banner-wrap">
+      <!-- JS-rendered risk banner -->
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="report-section report-enter">
+      <div class="kpi-grid" id="kpi-grid">
+        <!-- JS-rendered KPI cards -->
+      </div>
+    </div>
+
+    <!-- Section Tabs -->
+    <div class="report-section">
+      <nav class="section-tabs" role="tablist" aria-label="Report sections">
+        <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-theft" data-tab="theft" id="tab-btn-theft">
+          <i data-lucide="shield-alert" style="width:16px;height:16px;margin-right:4px;"></i>
+          Theft Risk
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-load" data-tab="load" id="tab-btn-load">
+          <i data-lucide="activity" style="width:16px;height:16px;margin-right:4px;"></i>
+          Load Profile
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-billing" data-tab="billing" id="tab-btn-billing">
+          <i data-lucide="receipt" style="width:16px;height:16px;margin-right:4px;"></i>
+          Billing
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-pq" data-tab="pq" id="tab-btn-pq">
+          <i data-lucide="gauge" style="width:16px;height:16px;margin-right:4px;"></i>
+          Power Quality
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-tod" data-tab="tod" id="tab-btn-tod">
+          <i data-lucide="clock" style="width:16px;height:16px;margin-right:4px;"></i>
+          TOD Analysis
+        </button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-raw" data-tab="raw" id="tab-btn-raw">
+          <i data-lucide="code-2" style="width:16px;height:16px;margin-right:4px;"></i>
+          Raw Findings
+        </button>
+      </nav>
+
+      <!-- Tab Panels -->
+      <div class="tab-panel active" id="tab-theft" role="tabpanel" aria-labelledby="tab-btn-theft">
+        <div class="flex flex-col gap-6">
+          <div class="executive-summary" id="executive-summary"></div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="alert-triangle" style="width:16px;height:16px;"></i> Findings</div></div>
+            <div class="card-body card-body--flush"><div class="data-table-wrap" id="findings-table-wrap"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="bar-chart-3" style="width:16px;height:16px;"></i> Load–Billing Reconciliation</div></div>
+            <div class="card-body"><div class="chart-container"><canvas id="chart-reconciliation" aria-label="Load vs billing reconciliation bar chart"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="table" style="width:16px;height:16px;"></i> Top Anomaly Intervals</div></div>
+            <div class="card-body card-body--flush"><div class="data-table-wrap" id="anomaly-intervals-wrap"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-load" role="tabpanel" aria-labelledby="tab-btn-load">
+        <div class="flex flex-col gap-6">
+          <div class="stats-grid" id="load-stats"></div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="trending-up" style="width:16px;height:16px;"></i> Daily Average Load Curve</div></div>
+            <div class="card-body"><div class="chart-container"><canvas id="chart-load-curve" aria-label="Average daily load curve"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="grid-3x3" style="width:16px;height:16px;"></i> Consumption Heatmap (Last 30 Days)</div></div>
+            <div class="card-body card-body--flush"><div class="heatmap-container" id="heatmap-container"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-billing" role="tabpanel" aria-labelledby="tab-btn-billing">
+        <div class="flex flex-col gap-6">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="trending-up" style="width:16px;height:16px;"></i> Monthly kWh Consumption Trend</div></div>
+            <div class="card-body"><div class="chart-container"><canvas id="chart-monthly-kwh" aria-label="Monthly energy consumption trend"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="bar-chart" style="width:16px;height:16px;"></i> Monthly Max Demand (kVA)</div></div>
+            <div class="card-body"><div class="chart-container"><canvas id="chart-max-demand" aria-label="Monthly maximum demand trend"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="table" style="width:16px;height:16px;"></i> Billing Summary</div></div>
+            <div class="card-body card-body--flush"><div class="data-table-wrap" id="billing-table-wrap"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-pq" role="tabpanel" aria-labelledby="tab-btn-pq">
+        <div class="flex flex-col gap-6">
+          <div class="stats-grid" id="pq-stats"></div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="zap" style="width:16px;height:16px;"></i> Phase Voltage Trends (Last 7 Days)</div></div>
+            <div class="card-body"><div class="chart-container chart-container--tall"><canvas id="chart-phase-voltage" aria-label="Phase voltage trend chart"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="zap" style="width:16px;height:16px;"></i> Phase Current Trends (Last 7 Days)</div></div>
+            <div class="card-body"><div class="chart-container chart-container--tall"><canvas id="chart-phase-current" aria-label="Phase current trend chart"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="alert-circle" style="width:16px;height:16px;"></i> Current Imbalance Over Time</div></div>
+            <div class="card-body"><div class="chart-container"><canvas id="chart-imbalance" aria-label="Current imbalance percentage over time"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="gauge" style="width:16px;height:16px;"></i> Power Factor Trend</div></div>
+            <div class="card-body"><div class="chart-container"><canvas id="chart-pf-trend" aria-label="Power factor trend chart"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-tod" role="tabpanel" aria-labelledby="tab-btn-tod">
+        <div class="flex flex-col gap-6">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="pie-chart" style="width:16px;height:16px;"></i> TOD Distribution (Latest Month)</div></div>
+            <div class="card-body"><div class="chart-container" style="max-width:400px;margin:0 auto;"><canvas id="chart-tod-donut" aria-label="Time of Day energy distribution"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="bar-chart-3" style="width:16px;height:16px;"></i> TOD Monthly Breakdown</div></div>
+            <div class="card-body"><div class="chart-container chart-container--tall"><canvas id="chart-tod-monthly" aria-label="TOD monthly stacked bar chart"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i data-lucide="table" style="width:16px;height:16px;"></i> TOD Summary Table</div></div>
+            <div class="card-body card-body--flush"><div class="data-table-wrap" id="tod-table-wrap"></div></div>
+          </div>
+          <div id="tod-validation-result" class="hidden" style="padding:0 var(--space-6) var(--space-4);"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-raw" role="tabpanel" aria-labelledby="tab-btn-raw">
+        <div class="flex flex-col gap-4">
+          <div class="flex justify-between items-center">
+            <h3>All Computed Analysis Outputs</h3>
+            <button class="btn btn-secondary btn-sm" id="btn-copy-raw" aria-label="Copy raw findings to clipboard">
+              <i data-lucide="clipboard-copy" style="width:14px;height:14px;"></i> Copy All
+            </button>
+          </div>
+          <div id="raw-findings-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Download Report -->
+    <div class="download-section">
+      <button class="btn btn-primary" id="btn-download-report">
+        <i data-lucide="download" style="width:18px;height:18px;"></i>
+        Download Report
+      </button>
+    </div>
+  </section>
+
+  <!-- Heatmap Tooltip -->
+  <div class="tooltip" id="heatmap-tooltip"></div>
+
+  <script type="module">
+
+    // ─── SECTION 1: Data Parser ────────────────────────────────────
+
+    function safeFloat(val, fallback = 0) {
+      if (val == null || val === '') return fallback;
+      const n = parseFloat(val);
+      return isNaN(n) ? fallback : n;
+    }
+
+    const MONTH_MAP = { Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11 };
+
+    function parseDate(str) {
+      if (!str) return null;
+      // Try ISO first
+      let d = new Date(str);
+      if (!isNaN(d.getTime())) return d;
+      // DD-Mon-YYYY HH:MM:SS
+      const m = str.match(/^(\d{1,2})-(\w{3})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+      if (m) {
+        const mon = MONTH_MAP[m[2]];
+        if (mon !== undefined) return new Date(+m[3], mon, +m[1], +m[4], +m[5], +m[6]);
+      }
+      // DD-Mon-YYYY
+      const m2 = str.match(/^(\d{1,2})-(\w{3})-(\d{4})$/);
+      if (m2) {
+        const mon = MONTH_MAP[m2[2]];
+        if (mon !== undefined) return new Date(+m2[3], mon, +m2[1]);
+      }
+      return null;
+    }
+
+    function formatMonth(d) {
+      if (!d) return '—';
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return months[d.getMonth()] + ' ' + d.getFullYear();
+    }
+
+    function formatNum(n, dp = 1) {
+      if (n == null || isNaN(n)) return '—';
+      return n.toLocaleString('en-IN', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    }
+
+    function parseJsonFile(raw) {
+      if (!raw.Meter_Number && !raw.General?.Meter_No) throw new Error('Missing Meter_Number');
+      if (!raw.Billing_List || !Array.isArray(raw.Billing_List)) throw new Error('Missing Billing_List');
+
+      const billing = [...raw.Billing_List].sort((a, b) => {
+        const da = parseDate(a.Billing_DateTime || a.Billing_Date);
+        const db = parseDate(b.Billing_DateTime || b.Billing_Date);
+        return (da?.getTime() || 0) - (db?.getTime() || 0);
+      });
+
+      const loadSurvey = Array.isArray(raw.LoadSurvey_List)
+        ? [...raw.LoadSurvey_List].sort((a, b) => {
+            const da = parseDate(a.Date_Time);
+            const db = parseDate(b.Date_Time);
+            return (da?.getTime() || 0) - (db?.getTime() || 0);
+          })
+        : [];
+
+      return { ...raw, Billing_List: billing, LoadSurvey_List: loadSurvey };
+    }
+
+    // ─── SECTION 2: Analysis Engine ────────────────────────────────
+
+    class MeterAnalysisEngine {
+      analyze(data) {
+        this.data = data;
+        this.general = data.General || {};
+        this.instant = data.Instantenous || data.Instantaneous || {};
+        this.billing = data.Billing_List || [];
+        this.loadSurvey = data.LoadSurvey_List || [];
+        this.hasLoadSurvey = this.loadSurvey.length > 0;
+        this.hasBilling = this.billing.length >= 2;
+
+        const identity = this.computeIdentity();
+        const counters = this.computeCounters();
+        const monthly = this.hasBilling ? this.computeMonthlyBilling() : [];
+        const lsStats = this.hasLoadSurvey ? this.computeLoadSurveyStats() : [];
+        const reconciliation = (this.hasBilling && this.hasLoadSurvey) ? this.reconcileBillingVsIntervals(monthly) : [];
+        const gaps = this.hasLoadSurvey ? this.detectLoadGaps() : { minor: 0, significant: 0, major: 0, totalMissing: 0, gapList: [] };
+        const nightAnomaly = this.hasLoadSurvey ? this.detectNightLoadAnomaly() : { anomalousDays: [] };
+        const phaseImbalance = this.hasLoadSurvey ? this.detectPhaseImbalance() : { imbalancedPct: 0, severeCount: 0, voltageDeviationPct: 0 };
+        const todValidation = this.hasBilling ? this.computeTODValidation() : null;
+        const pfTrend = this.hasBilling ? this.computePowerFactorTrend(monthly) : [];
+        const mdAnomaly = this.hasBilling ? this.computeMDAnomaly(monthly) : [];
+        const carbon = this.computeCarbonFootprint(monthly);
+        const consumptionDrop = this.hasBilling ? this.detectConsumptionDrop(monthly) : [];
+        const zeroConsumption = this.hasLoadSurvey ? this.detectZeroConsumptionPeriods() : { periods: [], totalHours: 0 };
+        const singlePhaseOp = this.hasLoadSurvey ? this.detectSinglePhaseOperation() : { pct: 0, count: 0, dominantPhase: null };
+        const reverseEnergy = this.hasBilling ? this.detectReverseEnergy() : { detected: false };
+        const kvahKwhRatio = this.hasBilling ? this.analyzeKvahKwhRatio(monthly) : [];
+        const consumptionVolatility = this.hasBilling ? this.computeConsumptionVolatility(monthly) : { cv: 0 };
+        const peakOffPeakRatio = this.hasLoadSurvey ? this.analyzePeakOffPeakRatio() : null;
+        const estimatedRevenueLoss = this.estimateRevenueLoss(monthly, reconciliation, counters);
+        const benfords = this.hasLoadSurvey ? this.analyzeBenfordsLaw() : null;
+        const powerTriangle = this.verifyPowerTriangle();
+        const cusum = this.hasBilling ? this.detectCUSUM(monthly) : null;
+        const loadEntropy = this.hasLoadSurvey ? this.computeLoadEntropy() : null;
+        const weekdayWeekend = this.hasLoadSurvey ? this.analyzeWeekdayWeekend() : null;
+        const autocorrelation = this.hasLoadSurvey ? this.computeAutocorrelation() : null;
+        const currentPowerCorr = this.hasLoadSurvey ? this.analyzeCurrentPowerCorrelation() : null;
+        const billingRegularity = this.hasBilling ? this.analyzeBillingCycleRegularity() : null;
+        const energyBalance = this.hasBilling ? this.verifyEnergyBalance(monthly) : [];
+        const consumptionGradient = this.hasLoadSurvey ? this.analyzeConsumptionGradient() : null;
+
+        const findings = this.generateFindings({
+          counters, reconciliation, gaps, nightAnomaly, phaseImbalance,
+          todValidation, pfTrend, mdAnomaly, monthly, consumptionDrop,
+          zeroConsumption, singlePhaseOp, reverseEnergy, kvahKwhRatio,
+          consumptionVolatility, peakOffPeakRatio, estimatedRevenueLoss,
+          benfords, powerTriangle, cusum, loadEntropy, weekdayWeekend,
+          autocorrelation, currentPowerCorr, billingRegularity, energyBalance,
+          consumptionGradient
+        });
+        const risk = scoreFindings(findings);
+
+        return {
+          identity, counters, monthly, lsStats, reconciliation, gaps,
+          nightAnomaly, phaseImbalance, todValidation, pfTrend, mdAnomaly,
+          carbon, findings, risk, consumptionDrop, zeroConsumption,
+          singlePhaseOp, reverseEnergy, kvahKwhRatio, consumptionVolatility,
+          peakOffPeakRatio, estimatedRevenueLoss, benfords, powerTriangle,
+          cusum, loadEntropy, weekdayWeekend, autocorrelation, currentPowerCorr,
+          billingRegularity, energyBalance, consumptionGradient,
+          hasLoadSurvey: this.hasLoadSurvey,
+          hasBilling: this.hasBilling
+        };
+      }
+
+      computeIdentity() {
+        return {
+          meterNumber: this.data.Meter_Number || this.general.Meter_No || '—',
+          manufacturer: this.data.Meter_Make || this.general.Meter_Make || '—',
+          firmware: this.general.Firmware || '—',
+          ptRatio: safeFloat(this.general.Internal_PT_Ratio, 1),
+          ctRatio: safeFloat(this.general.Internal_CT_Ratio, 1),
+          demandIntegrationPeriod: safeFloat(this.general.Demand_Integration_Period, 30),
+          lastVisited: this.data.Visited_Date || '—',
+          rtcDate: this.data.RTC_Date || '—'
+        };
+      }
+
+      computeCounters() {
+        return {
+          tamperCount: safeFloat(this.instant.Cumulative_Tamper_Count),
+          powerFailures: safeFloat(this.instant.No_Of_Power_Failures),
+          programmingCount: safeFloat(this.instant.Cumulative_Programming_Count),
+          billingCount: safeFloat(this.instant.Cumulative_Billing_Count) || this.billing.length,
+          cumulativeKWH: safeFloat(this.instant.Active_Cummulative_KWH),
+          cumulativeKVAH: safeFloat(this.instant.Apparent_Cummulative_KVAH),
+          powerFactor: safeFloat(this.instant.Power_Factor),
+          frequency: safeFloat(this.instant.Frequency),
+          apparentPower: safeFloat(this.instant.Apparent_Power),
+        };
+      }
+
+      computeMonthlyBilling() {
+        const monthly = [];
+        for (let i = 1; i < this.billing.length; i++) {
+          const prev = this.billing[i - 1];
+          const curr = this.billing[i];
+          const date = parseDate(curr.Billing_DateTime || curr.Billing_Date);
+          const prevDate = parseDate(prev.Billing_DateTime || prev.Billing_Date);
+          const kwh = safeFloat(curr.Cumulative_Energy_KWH) - safeFloat(prev.Cumulative_Energy_KWH);
+          const kvah = safeFloat(curr.Cumulative_Energy_KVAH) - safeFloat(prev.Cumulative_Energy_KVAH);
+          const kvarhLag = safeFloat(curr.Cumulative_Energy_KVARH_Lag) - safeFloat(prev.Cumulative_Energy_KVARH_Lag);
+          const maxDemandKVA = safeFloat(curr.Maximum_Demand_KVA);
+          const maxDemandKW = safeFloat(curr.Maximum_Demand_KW);
+          const pf = safeFloat(curr.Power_Factor);
+          const hoursInMonth = (date && prevDate) ? (date - prevDate) / 3600000 : 720;
+          const loadFactor = maxDemandKVA > 0 ? (kwh / (maxDemandKVA * hoursInMonth)) * 100 : 0;
+
+          // TOD data
+          const tod = [];
+          for (let t = 1; t <= 8; t++) {
+            tod.push({
+              kwh: safeFloat(curr[`TOD${t}_KWH`]),
+              kvah: safeFloat(curr[`TOD${t}_KVAH`]),
+              mdKVA: safeFloat(curr[`Maximum_Demand_TOD${t}_KVA`]),
+              mdKW: safeFloat(curr[`Maximum_Demand_TOD${t}_KW`]),
+            });
+          }
+
+          monthly.push({
+            date, prevDate, kwh, kvah, kvarhLag, maxDemandKVA, maxDemandKW,
+            pf, loadFactor, hoursInMonth, tod,
+            label: formatMonth(date),
+            billingRecord: curr
+          });
+        }
+        return monthly;
+      }
+
+      computeLoadSurveyStats() {
+        return this.loadSurvey.map(entry => {
+          const ts = parseDate(entry.Date_Time);
+          const kwh = safeFloat(entry.KWH);
+          const kvah = safeFloat(entry.KVAH);
+          const ir = safeFloat(entry.Ir);
+          const iy = safeFloat(entry.Iy);
+          const ib = safeFloat(entry.Ib);
+          const vr = safeFloat(entry.Vr);
+          const vy = safeFloat(entry.Vy);
+          const vb = safeFloat(entry.Vb);
+          const avgI = (ir + iy + ib) / 3;
+          const avgV = (vr + vy + vb) / 3;
+          const currentImbalancePct = (avgI > 0.1) ? ((Math.max(ir, iy, ib) - Math.min(ir, iy, ib)) / avgI) * 100 : 0;
+          const voltageImbalancePct = (avgV > 1) ? ((Math.max(vr, vy, vb) - Math.min(vr, vy, vb)) / avgV) * 100 : 0;
+          return { ts, kwh, kvah, ir, iy, ib, vr, vy, vb, currentImbalancePct, voltageImbalancePct, mdKVA: safeFloat(entry.Maximum_Demand_KVA), mdKW: safeFloat(entry.Maximum_Demand_KW) };
+        });
+      }
+
+      reconcileBillingVsIntervals(monthly) {
+        if (!this.hasLoadSurvey || monthly.length === 0) return [];
+        const results = [];
+        for (const m of monthly) {
+          if (!m.prevDate || !m.date) continue;
+          const start = m.prevDate.getTime();
+          const end = m.date.getTime();
+          let sumKWH = 0;
+          for (const ls of this.loadSurvey) {
+            const t = parseDate(ls.Date_Time);
+            if (t && t.getTime() > start && t.getTime() <= end) {
+              sumKWH += safeFloat(ls.KWH);
+            }
+          }
+          const mismatchPct = m.kwh > 0 ? (Math.abs(sumKWH - m.kwh) / m.kwh) * 100 : 0;
+          results.push({
+            label: m.label,
+            billingKWH: m.kwh,
+            surveyKWH: sumKWH,
+            mismatchPct,
+            surveyLess: sumKWH < m.kwh * 0.85,
+            surveyMore: sumKWH > m.kwh * 1.15
+          });
+        }
+        return results;
+      }
+
+      detectLoadGaps() {
+        let minor = 0, significant = 0, major = 0, totalMissing = 0;
+        const gapList = [];
+        const intervalMin = safeFloat(this.general.Load_Interval_Period, 30);
+        for (let i = 1; i < this.loadSurvey.length; i++) {
+          const t1 = parseDate(this.loadSurvey[i - 1].Date_Time);
+          const t2 = parseDate(this.loadSurvey[i].Date_Time);
+          if (!t1 || !t2) continue;
+          const gapMinutes = (t2 - t1) / 60000;
+          if (gapMinutes > intervalMin) {
+            const missing = Math.round(gapMinutes / intervalMin) - 1;
+            totalMissing += missing;
+            if (gapMinutes >= 480) { major++; gapList.push({ start: t1, end: t2, gapMinutes, missing, severity: 'major' }); }
+            else if (gapMinutes >= 120) { significant++; gapList.push({ start: t1, end: t2, gapMinutes, missing, severity: 'significant' }); }
+            else { minor++; }
+          }
+        }
+        return { minor, significant, major, totalMissing, gapList };
+      }
+
+      detectNightLoadAnomaly() {
+        // Group load survey by day
+        const dayMap = new Map();
+        for (const ls of this.loadSurvey) {
+          const t = parseDate(ls.Date_Time);
+          if (!t) continue;
+          const key = t.toISOString().slice(0, 10);
+          if (!dayMap.has(key)) dayMap.set(key, []);
+          dayMap.get(key).push({ t, kwh: safeFloat(ls.KWH) });
+        }
+
+        const dailyNightRatios = [];
+        const anomalousDays = [];
+
+        for (const [dateKey, intervals] of dayMap) {
+          let dayLoad = 0, nightLoad = 0;
+          for (const { t, kwh } of intervals) {
+            const h = t.getHours();
+            if (h >= 6 && h < 22) dayLoad += kwh;
+            else nightLoad += kwh;
+          }
+          const total = dayLoad + nightLoad;
+          const nightRatio = total > 0 ? (nightLoad / total) * 100 : 0;
+          dailyNightRatios.push({ date: dateKey, nightRatio, dayLoad, nightLoad });
+
+          // Zero night load with active day load
+          if (nightLoad === 0 && dayLoad > 0) {
+            anomalousDays.push({ date: dateKey, type: 'zero-night', dayLoad, nightLoad });
+          }
+        }
+
+        // Rolling 7-day average check
+        for (let i = 7; i < dailyNightRatios.length; i++) {
+          const window = dailyNightRatios.slice(i - 7, i);
+          const avgNight = window.reduce((s, d) => s + d.nightLoad, 0) / 7;
+          const curr = dailyNightRatios[i];
+          if (avgNight > 0 && curr.nightLoad < avgNight * 0.3 && curr.dayLoad > 0) {
+            if (!anomalousDays.find(a => a.date === curr.date)) {
+              anomalousDays.push({ date: curr.date, type: 'sudden-drop', dayLoad: curr.dayLoad, nightLoad: curr.nightLoad });
+            }
+          }
+          if (avgNight > 0 && curr.nightLoad > avgNight * 4) {
+            if (!anomalousDays.find(a => a.date === curr.date)) {
+              anomalousDays.push({ date: curr.date, type: 'spike', dayLoad: curr.dayLoad, nightLoad: curr.nightLoad });
+            }
+          }
+        }
+
+        return { dailyNightRatios, anomalousDays };
+      }
+
+      detectPhaseImbalance() {
+        let total = 0, imbalanced = 0, severe = 0, voltageDeviant = 0, totalVoltage = 0;
+        const intervals = [];
+        for (const ls of this.loadSurvey) {
+          const ir = safeFloat(ls.Ir), iy = safeFloat(ls.Iy), ib = safeFloat(ls.Ib);
+          const vr = safeFloat(ls.Vr), vy = safeFloat(ls.Vy), vb = safeFloat(ls.Vb);
+          const avgI = (ir + iy + ib) / 3;
+          if (ir > 0.1 && iy > 0.1 && ib > 0.1) {
+            total++;
+            const pct = ((Math.max(ir, iy, ib) - Math.min(ir, iy, ib)) / avgI) * 100;
+            if (pct > 15) imbalanced++;
+            if (pct > 30) severe++;
+            intervals.push({ ts: parseDate(ls.Date_Time), pct });
+          }
+          const avgV = (vr + vy + vb) / 3;
+          if (avgV > 1) {
+            totalVoltage++;
+            if (Math.abs(vr - avgV) / avgV > 0.1 || Math.abs(vy - avgV) / avgV > 0.1 || Math.abs(vb - avgV) / avgV > 0.1) {
+              voltageDeviant++;
+            }
+          }
+        }
+        return {
+          total,
+          imbalanced,
+          severe,
+          imbalancedPct: total > 0 ? (imbalanced / total) * 100 : 0,
+          voltageDeviationPct: totalVoltage > 0 ? (voltageDeviant / totalVoltage) * 100 : 0,
+          intervals
+        };
+      }
+
+      computeTODValidation() {
+        if (this.billing.length < 2) return null;
+        const latest = this.billing[this.billing.length - 1];
+        const earliest = this.billing[0];
+        let sumTOD = 0;
+        for (let t = 1; t <= 8; t++) sumTOD += safeFloat(latest[`TOD${t}_KWH`]);
+        const cumulativeKWH = safeFloat(latest.Cumulative_Energy_KWH) - safeFloat(earliest.Cumulative_Energy_KWH);
+        const mismatchPct = cumulativeKWH > 0 ? (Math.abs(sumTOD - cumulativeKWH) / cumulativeKWH) * 100 : 0;
+        return { sumTOD, cumulativeKWH, mismatchPct };
+      }
+
+      computePowerFactorTrend(monthly) {
+        const jumps = [];
+        for (let i = 1; i < monthly.length; i++) {
+          const diff = monthly[i].pf - monthly[i - 1].pf;
+          if (diff > 0.03) {
+            jumps.push({ month: monthly[i].label, pfOld: monthly[i - 1].pf, pfNew: monthly[i].pf, diff });
+          }
+        }
+        return jumps;
+      }
+
+      computeMDAnomaly(monthly) {
+        const anomalies = [];
+        for (let i = 1; i < monthly.length; i++) {
+          const prev = monthly[i - 1].maxDemandKVA;
+          const curr = monthly[i].maxDemandKVA;
+          if (prev > 0) {
+            const dropPct = ((prev - curr) / prev) * 100;
+            if (dropPct > 30 && monthly[i].kwh >= monthly[i - 1].kwh * 0.9) {
+              anomalies.push({
+                month: monthly[i].label,
+                mdOld: prev, mdNew: curr, dropPct,
+                consumptionChange: monthly[i].kwh >= monthly[i - 1].kwh ? 'remained stable or increased' : 'decreased'
+              });
+            }
+          }
+        }
+        return anomalies;
+      }
+
+      computeCarbonFootprint(monthly) {
+        const FACTOR = 0.716;
+        const perMonth = monthly.map(m => ({
+          label: m.label, kwh: m.kwh,
+          carbonKg: m.kwh * FACTOR,
+          carbonTonnes: (m.kwh * FACTOR) / 1000
+        }));
+        const totalKg = perMonth.reduce((s, m) => s + m.carbonKg, 0);
+        return { perMonth, totalKg, totalTonnes: totalKg / 1000 };
+      }
+
+      // ─── NEW MODULE: Sudden Consumption Drop Detection ────────────
+      detectConsumptionDrop(monthly) {
+        const drops = [];
+        for (let i = 1; i < monthly.length; i++) {
+          const prev = monthly[i - 1].kwh;
+          const curr = monthly[i].kwh;
+          if (prev > 0) {
+            const dropPct = ((prev - curr) / prev) * 100;
+            if (dropPct > 40) {
+              // Check if next month recovers (temporary dip = seasonal, persistent = suspicious)
+              const nextRecovers = (i + 1 < monthly.length) && (monthly[i + 1].kwh > prev * 0.8);
+              drops.push({
+                month: monthly[i].label, prevMonth: monthly[i - 1].label,
+                prevKWH: prev, currKWH: curr, dropPct, nextRecovers
+              });
+            }
+          }
+        }
+        return drops;
+      }
+
+      // ─── NEW MODULE: Zero Consumption Periods ────────────────────
+      detectZeroConsumptionPeriods() {
+        const periods = [];
+        let streakStart = null, streakCount = 0;
+        for (let i = 0; i < this.loadSurvey.length; i++) {
+          const kwh = safeFloat(this.loadSurvey[i].KWH);
+          const ts = parseDate(this.loadSurvey[i].Date_Time);
+          if (kwh === 0) {
+            if (!streakStart) streakStart = ts;
+            streakCount++;
+          } else {
+            if (streakCount >= 6) { // 3+ hours of zero consumption
+              periods.push({ start: streakStart, end: ts, intervals: streakCount, hours: streakCount * 0.5 });
+            }
+            streakStart = null;
+            streakCount = 0;
+          }
+        }
+        if (streakCount >= 6 && streakStart) {
+          const lastTs = parseDate(this.loadSurvey[this.loadSurvey.length - 1].Date_Time);
+          periods.push({ start: streakStart, end: lastTs, intervals: streakCount, hours: streakCount * 0.5 });
+        }
+        const totalHours = periods.reduce((s, p) => s + p.hours, 0);
+        return { periods, totalHours };
+      }
+
+      // ─── NEW MODULE: Single Phase Operation Detection ────────────
+      detectSinglePhaseOperation() {
+        let total = 0, singlePhase = 0;
+        const phaseDown = { R: 0, Y: 0, B: 0 };
+        for (const ls of this.loadSurvey) {
+          const ir = safeFloat(ls.Ir), iy = safeFloat(ls.Iy), ib = safeFloat(ls.Ib);
+          const totalI = ir + iy + ib;
+          if (totalI < 0.1) continue; // skip no-load intervals
+          total++;
+          const phases = [ir, iy, ib];
+          const zeroPhases = phases.filter(p => p < 0.05).length;
+          if (zeroPhases >= 1 && totalI > 0.5) {
+            singlePhase++;
+            if (ir < 0.05) phaseDown.R++;
+            if (iy < 0.05) phaseDown.Y++;
+            if (ib < 0.05) phaseDown.B++;
+          }
+        }
+        const pct = total > 0 ? (singlePhase / total) * 100 : 0;
+        const dominant = Object.entries(phaseDown).sort((a, b) => b[1] - a[1]);
+        return {
+          pct, count: singlePhase, total,
+          dominantPhase: dominant[0]?.[1] > 0 ? dominant[0][0] : null,
+          dominantCount: dominant[0]?.[1] || 0,
+          phaseDown
+        };
+      }
+
+      // ─── NEW MODULE: Reverse Energy / Negative Consumption ───────
+      detectReverseEnergy() {
+        const kvarhLead = safeFloat(this.instant.Cumulative_KVARH_Lead);
+        const kvarhLag = safeFloat(this.instant.Cumulative_KVARH_Lag);
+        const ratio = kvarhLag > 0 ? kvarhLead / kvarhLag : 0;
+        // Check for negative monthly consumption (meter rollback indicator)
+        const negativeMonths = [];
+        for (let i = 1; i < this.billing.length; i++) {
+          const diff = safeFloat(this.billing[i].Cumulative_Energy_KWH) - safeFloat(this.billing[i - 1].Cumulative_Energy_KWH);
+          if (diff < -1) {
+            negativeMonths.push({
+              month: formatMonth(parseDate(this.billing[i].Billing_DateTime || this.billing[i].Billing_Date)),
+              diff
+            });
+          }
+        }
+        return {
+          detected: negativeMonths.length > 0 || ratio > 0.5,
+          kvarhLead, kvarhLag, ratio, negativeMonths
+        };
+      }
+
+      // ─── NEW MODULE: kVAh/kWh Ratio Analysis ────────────────────
+      analyzeKvahKwhRatio(monthly) {
+        const anomalies = [];
+        for (const m of monthly) {
+          if (m.kwh > 0 && m.kvah > 0) {
+            const ratio = m.kvah / m.kwh;
+            // ratio should be >= 1.0 (since kVAh >= kWh always). If ratio < 0.98 → register inconsistency
+            if (ratio < 0.98) {
+              anomalies.push({ month: m.label, kwh: m.kwh, kvah: m.kvah, ratio });
+            }
+            // If ratio is extremely high (> 1.5), power factor is very poor
+            if (ratio > 1.5 && m.pf > 0.9) {
+              anomalies.push({ month: m.label, kwh: m.kwh, kvah: m.kvah, ratio, type: 'pf-mismatch' });
+            }
+          }
+        }
+        return anomalies;
+      }
+
+      // ─── NEW MODULE: Consumption Volatility (CV) ─────────────────
+      computeConsumptionVolatility(monthly) {
+        if (monthly.length < 3) return { cv: 0, mean: 0, stddev: 0 };
+        const values = monthly.map(m => m.kwh);
+        const mean = values.reduce((s, v) => s + v, 0) / values.length;
+        const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+        const stddev = Math.sqrt(variance);
+        const cv = mean > 0 ? (stddev / mean) * 100 : 0;
+        // Identify outlier months (> 2 stddev from mean)
+        const outliers = monthly.filter(m => Math.abs(m.kwh - mean) > 2 * stddev)
+          .map(m => ({ month: m.label, kwh: m.kwh, deviations: ((m.kwh - mean) / stddev).toFixed(1) }));
+        return { cv, mean, stddev, outliers };
+      }
+
+      // ─── NEW MODULE: Peak vs Off-Peak Ratio ──────────────────────
+      analyzePeakOffPeakRatio() {
+        let peakKWH = 0, offPeakKWH = 0, peakCount = 0, offPeakCount = 0;
+        for (const ls of this.loadSurvey) {
+          const t = parseDate(ls.Date_Time);
+          if (!t) continue;
+          const h = t.getHours();
+          const kwh = safeFloat(ls.KWH);
+          // Indian peak hours: 06:00-10:00, 18:00-22:00
+          if ((h >= 6 && h < 10) || (h >= 18 && h < 22)) {
+            peakKWH += kwh; peakCount++;
+          } else {
+            offPeakKWH += kwh; offPeakCount++;
+          }
+        }
+        const avgPeak = peakCount > 0 ? peakKWH / peakCount : 0;
+        const avgOffPeak = offPeakCount > 0 ? offPeakKWH / offPeakCount : 0;
+        const ratio = avgOffPeak > 0 ? avgPeak / avgOffPeak : 0;
+        return { peakKWH, offPeakKWH, avgPeak, avgOffPeak, ratio };
+      }
+
+      // ─── NEW MODULE: Estimated Revenue Loss ──────────────────────
+      estimateRevenueLoss(monthly, reconciliation, counters) {
+        // Average industrial tariff INR 8.5/kWh as baseline
+        const TARIFF = 8.5;
+        let estimatedLossKWH = 0;
+        let methodology = [];
+
+        // From reconciliation mismatch
+        for (const r of reconciliation) {
+          if (r.surveyLess && r.billingKWH > 0) {
+            const lossKWH = r.billingKWH - r.surveyKWH;
+            if (lossKWH > 0) {
+              estimatedLossKWH += lossKWH;
+              methodology.push(`${r.label}: ${lossKWH.toFixed(0)} kWh gap (billing vs interval)`);
+            }
+          }
+        }
+
+        // From consumption drops that don't recover
+        const avgKWH = monthly.length > 0 ? monthly.reduce((s, m) => s + m.kwh, 0) / monthly.length : 0;
+        for (let i = 1; i < monthly.length; i++) {
+          if (monthly[i].kwh < avgKWH * 0.4 && monthly[i - 1].kwh > avgKWH * 0.8) {
+            const diff = monthly[i - 1].kwh - monthly[i].kwh;
+            estimatedLossKWH += diff * 0.5; // conservative 50% attribution
+            methodology.push(`${monthly[i].label}: ${(diff * 0.5).toFixed(0)} kWh estimated suppression`);
+          }
+        }
+
+        return {
+          estimatedLossKWH,
+          estimatedLossINR: estimatedLossKWH * TARIFF,
+          tariffUsed: TARIFF,
+          methodology,
+          annualizedLossINR: monthly.length > 0 ? (estimatedLossKWH * TARIFF / monthly.length) * 12 : 0
+        };
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // ADVANCED NON-INVASIVE VERIFICATION MODULES
+      // Techniques used by EPRI, ESKOM, Enel, and global utilities
+      // ═══════════════════════════════════════════════════════════════
+
+      // ─── Benford's Law Analysis ──────────────────────────────────
+      // In naturally occurring datasets, the first digit follows a
+      // logarithmic distribution (1 appears ~30.1%, 2 ~17.6%, etc.)
+      // Manipulated or fabricated meter data deviates from this.
+      analyzeBenfordsLaw() {
+        const values = [];
+        for (const ls of this.loadSurvey) {
+          const kwh = safeFloat(ls.KWH);
+          if (kwh > 0) values.push(kwh);
+          const ir = safeFloat(ls.Ir); if (ir > 0) values.push(ir);
+          const iy = safeFloat(ls.Iy); if (iy > 0) values.push(iy);
+          const ib = safeFloat(ls.Ib); if (ib > 0) values.push(ib);
+        }
+        if (values.length < 100) return null; // Need enough data points
+
+        const expectedPct = [0, 30.1, 17.6, 12.5, 9.7, 7.9, 6.7, 5.8, 5.1, 4.6]; // Benford's distribution
+        const digitCounts = new Array(10).fill(0);
+        for (const v of values) {
+          const firstDigit = parseInt(v.toString().replace(/^0\.0*/, '').charAt(0));
+          if (firstDigit >= 1 && firstDigit <= 9) digitCounts[firstDigit]++;
+        }
+        const total = digitCounts.slice(1).reduce((s, c) => s + c, 0);
+        if (total === 0) return null;
+
+        const observedPct = digitCounts.map(c => (c / total) * 100);
+        // Chi-squared test
+        let chiSquared = 0;
+        for (let d = 1; d <= 9; d++) {
+          const expected = (expectedPct[d] / 100) * total;
+          chiSquared += ((digitCounts[d] - expected) ** 2) / expected;
+        }
+        // Chi-squared critical value for 8 degrees of freedom at p=0.05 is 15.51
+        const isAnomaly = chiSquared > 15.51;
+        const maxDeviation = Math.max(...observedPct.slice(1).map((o, i) => Math.abs(o - expectedPct[i + 1])));
+
+        return {
+          totalValues: total, chiSquared, isAnomaly, maxDeviation,
+          observed: observedPct.slice(1),
+          expected: expectedPct.slice(1),
+          digits: digitCounts.slice(1)
+        };
+      }
+
+      // ─── Power Triangle Consistency (V-I-PF-P Check) ────────────
+      // Verifies: P = V × I × PF × √3 (for 3-phase)
+      // If the meter reports power, voltage, current, and PF
+      // independently, they must be geometrically consistent.
+      verifyPowerTriangle() {
+        const V1 = safeFloat(this.instant.Voltage1);
+        const V2 = safeFloat(this.instant.Voltage2);
+        const V3 = safeFloat(this.instant.Voltage3);
+        const I1 = safeFloat(this.instant.Current1);
+        const I2 = safeFloat(this.instant.Current2);
+        const I3 = safeFloat(this.instant.Current3);
+        const pf = safeFloat(this.instant.Power_Factor);
+        const activePower = safeFloat(this.instant.Active_Power_Signed); // Watts
+        const apparentPower = safeFloat(this.instant.Apparent_Power); // VA
+        const reactivePower = safeFloat(this.instant.Reactive_Power_Signed); // VAR
+        const ptRatio = safeFloat(this.general.Internal_PT_Ratio, 1);
+
+        if (!V1 || !I1 || !apparentPower) return null;
+
+        const avgV = ((V1 + V2 + V3) / 3) * ptRatio;
+        const avgI = (I1 + I2 + I3) / 3;
+
+        // Calculated apparent power from V and I
+        const calculatedVA = Math.sqrt(3) * avgV * avgI;
+        const vaDeviation = apparentPower > 0 ? Math.abs(calculatedVA - apparentPower) / apparentPower * 100 : 0;
+
+        // P² + Q² should equal S²
+        const sSquared = activePower ** 2 + reactivePower ** 2;
+        const reportedSSquared = apparentPower ** 2;
+        const pqsDeviation = reportedSSquared > 0 ? Math.abs(sSquared - reportedSSquared) / reportedSSquared * 100 : 0;
+
+        // PF check: PF should equal P/S
+        const calculatedPF = apparentPower > 0 ? Math.abs(activePower) / apparentPower : 0;
+        const pfDeviation = pf > 0 ? Math.abs(calculatedPF - pf) / pf * 100 : 0;
+
+        return {
+          avgVoltage: avgV, avgCurrent: avgI,
+          calculatedVA, reportedVA: apparentPower, vaDeviation,
+          activePower, reactivePower, apparentPower,
+          pqsDeviation,
+          calculatedPF, reportedPF: pf, pfDeviation,
+          isConsistent: vaDeviation < 10 && pqsDeviation < 5 && pfDeviation < 5
+        };
+      }
+
+      // ─── CUSUM (Cumulative Sum) Change Point Detection ───────────
+      // Detects the exact point in time when consumption pattern
+      // shifts (theft onset). Used by EPRI and European utilities.
+      detectCUSUM(monthly) {
+        if (monthly.length < 4) return null;
+        const values = monthly.map(m => m.kwh);
+        const mean = values.reduce((s, v) => s + v, 0) / values.length;
+        const stddev = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length);
+        if (stddev === 0) return null;
+
+        // Allowable slack = 0.5 sigma, threshold = 4 sigma
+        const k = 0.5 * stddev;
+        const h = 4 * stddev;
+
+        const cusumHigh = [0], cusumLow = [0];
+        let changePoints = [];
+
+        for (let i = 0; i < values.length; i++) {
+          const sh = Math.max(0, (cusumHigh[i] || 0) + (values[i] - mean) - k);
+          const sl = Math.max(0, (cusumLow[i] || 0) - (values[i] - mean) - k);
+          cusumHigh.push(sh);
+          cusumLow.push(sl);
+          if (sh > h) changePoints.push({ index: i, month: monthly[i].label, type: 'increase', value: sh });
+          if (sl > h) changePoints.push({ index: i, month: monthly[i].label, type: 'decrease', value: sl });
+        }
+
+        return {
+          mean, stddev, threshold: h,
+          cusumHigh: cusumHigh.slice(1),
+          cusumLow: cusumLow.slice(1),
+          changePoints
+        };
+      }
+
+      // ─── Consumption Entropy Analysis ────────────────────────────
+      // Shannon entropy of the load profile. Legitimate consumers
+      // have characteristic entropy. Bypass devices reduce entropy
+      // by creating flat "zero" periods.
+      computeLoadEntropy() {
+        if (this.loadSurvey.length < 48) return null;
+        const values = this.loadSurvey.map(ls => safeFloat(ls.KWH));
+        const total = values.reduce((s, v) => s + v, 0);
+        if (total === 0) return null;
+
+        // Normalize to probability distribution
+        const probs = values.map(v => v / total).filter(p => p > 0);
+        const entropy = -probs.reduce((s, p) => s + p * Math.log2(p), 0);
+        const maxEntropy = Math.log2(values.length); // uniform distribution
+        const normalizedEntropy = entropy / maxEntropy;
+
+        // Compute entropy by time-of-day (should be consistent across days)
+        const slotEntropies = [];
+        const slotMap = new Map();
+        for (const ls of this.loadSurvey) {
+          const t = parseDate(ls.Date_Time);
+          if (!t) continue;
+          const slot = t.getHours() * 2 + (t.getMinutes() >= 30 ? 1 : 0);
+          if (!slotMap.has(slot)) slotMap.set(slot, []);
+          slotMap.get(slot).push(safeFloat(ls.KWH));
+        }
+        for (const [slot, vals] of slotMap) {
+          const slotTotal = vals.reduce((s, v) => s + v, 0);
+          if (slotTotal > 0) {
+            const ps = vals.map(v => v / slotTotal).filter(p => p > 0);
+            const se = -ps.reduce((s, p) => s + p * Math.log2(p), 0);
+            slotEntropies.push({ slot, entropy: se, count: vals.length });
+          }
+        }
+
+        return {
+          entropy, maxEntropy, normalizedEntropy,
+          slotEntropies,
+          isLowEntropy: normalizedEntropy < 0.65 // Threshold for suspiciously uniform/flat data
+        };
+      }
+
+      // ─── Weekday vs Weekend Pattern Analysis ────────────────────
+      // Industrial consumers should show lower weekend consumption.
+      // If weekend = weekday, either: continuous process (legitimate)
+      // or theft device running 24/7 and consumption is being masked.
+      analyzeWeekdayWeekend() {
+        const weekday = { total: 0, count: 0 };
+        const weekend = { total: 0, count: 0 };
+        const dayMap = new Map();
+
+        for (const ls of this.loadSurvey) {
+          const t = parseDate(ls.Date_Time);
+          if (!t) continue;
+          const key = t.toISOString().slice(0, 10);
+          if (!dayMap.has(key)) dayMap.set(key, { kwh: 0, day: t.getDay() });
+          dayMap.get(key).kwh += safeFloat(ls.KWH);
+        }
+
+        for (const [, d] of dayMap) {
+          if (d.day === 0 || d.day === 6) {
+            weekend.total += d.kwh; weekend.count++;
+          } else {
+            weekday.total += d.kwh; weekday.count++;
+          }
+        }
+
+        const avgWeekday = weekday.count > 0 ? weekday.total / weekday.count : 0;
+        const avgWeekend = weekend.count > 0 ? weekend.total / weekend.count : 0;
+        const ratio = avgWeekday > 0 ? avgWeekend / avgWeekday : 0;
+
+        return { avgWeekday, avgWeekend, ratio, weekdayDays: weekday.count, weekendDays: weekend.count };
+      }
+
+      // ─── Autocorrelation Analysis (24h & 168h Periodicity) ──────
+      // Legitimate load profiles show strong 24-hour and 7-day
+      // autocorrelation. Theft devices disrupt these natural cycles.
+      computeAutocorrelation() {
+        if (this.loadSurvey.length < 336) return null; // Need >= 7 days of data
+        const values = this.loadSurvey.map(ls => safeFloat(ls.KWH));
+        const mean = values.reduce((s, v) => s + v, 0) / values.length;
+        const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+        if (variance === 0) return null;
+
+        function acf(lag) {
+          let sum = 0, n = 0;
+          for (let i = 0; i < values.length - lag; i++) {
+            sum += (values[i] - mean) * (values[i + lag] - mean);
+            n++;
+          }
+          return n > 0 ? (sum / n) / variance : 0;
+        }
+
+        const lag48 = acf(48);  // 24-hour periodicity (48 × 30min)
+        const lag336 = acf(336); // 7-day periodicity (336 × 30min)
+        const lag1 = acf(1);     // Adjacent interval correlation
+
+        return {
+          daily: lag48,
+          weekly: lag336,
+          adjacent: lag1,
+          isDailyWeak: lag48 < 0.3,   // Normal meters: 0.4–0.8
+          isWeeklyWeak: lag336 < 0.2  // Normal meters: 0.3–0.7
+        };
+      }
+
+      // ─── Current–Power Correlation (I²R Consistency) ────────────
+      // If current is flowing through the CT, power must be recorded
+      // proportionally. A bypass causes I to flow but P to be zero/low.
+      analyzeCurrentPowerCorrelation() {
+        if (!this.hasLoadSurvey) return null;
+        let total = 0, anomalous = 0;
+        const anomalyList = [];
+        for (const ls of this.loadSurvey) {
+          const ir = safeFloat(ls.Ir), iy = safeFloat(ls.Iy), ib = safeFloat(ls.Ib);
+          const kwh = safeFloat(ls.KWH);
+          const totalI = ir + iy + ib;
+          if (totalI < 0.5) continue; // Skip no-load
+          total++;
+          // If significant current but near-zero kWh → bypass or PF issue
+          if (kwh < 0.001 && totalI > 1.0) {
+            anomalous++;
+            if (anomalyList.length < 10) {
+              anomalyList.push({ ts: parseDate(ls.Date_Time), ir, iy, ib, kwh, totalI });
+            }
+          }
+        }
+        const anomalyPct = total > 0 ? (anomalous / total) * 100 : 0;
+
+        // Compute Pearson correlation coefficient between total current and kWh
+        const pairs = [];
+        for (const ls of this.loadSurvey) {
+          const totalI = safeFloat(ls.Ir) + safeFloat(ls.Iy) + safeFloat(ls.Ib);
+          const kwh = safeFloat(ls.KWH);
+          if (totalI > 0.1) pairs.push([totalI, kwh]);
+        }
+        let correlation = 0;
+        if (pairs.length > 10) {
+          const n = pairs.length;
+          const sumX = pairs.reduce((s, p) => s + p[0], 0);
+          const sumY = pairs.reduce((s, p) => s + p[1], 0);
+          const sumXY = pairs.reduce((s, p) => s + p[0] * p[1], 0);
+          const sumX2 = pairs.reduce((s, p) => s + p[0] ** 2, 0);
+          const sumY2 = pairs.reduce((s, p) => s + p[1] ** 2, 0);
+          const denom = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
+          if (denom > 0) correlation = (n * sumXY - sumX * sumY) / denom;
+        }
+
+        return { total, anomalous, anomalyPct, correlation, anomalyList, isWeak: correlation < 0.6 };
+      }
+
+      // ─── Billing Cycle Regularity Check ─────────────────────────
+      // Billing dates should be ~30 days apart. Irregular cycles
+      // may indicate manipulated billing reads.
+      analyzeBillingCycleRegularity() {
+        if (this.billing.length < 3) return null;
+        const gaps = [];
+        for (let i = 1; i < this.billing.length; i++) {
+          const d1 = parseDate(this.billing[i - 1].Billing_DateTime || this.billing[i - 1].Billing_Date);
+          const d2 = parseDate(this.billing[i].Billing_DateTime || this.billing[i].Billing_Date);
+          if (d1 && d2) {
+            const days = (d2 - d1) / 86400000;
+            gaps.push({ from: d1, to: d2, days, label: formatMonth(d2) });
+          }
+        }
+        if (gaps.length === 0) return null;
+        const avgDays = gaps.reduce((s, g) => s + g.days, 0) / gaps.length;
+        const shortCycles = gaps.filter(g => g.days < 25);
+        const longCycles = gaps.filter(g => g.days > 35);
+        return { gaps, avgDays, shortCycles, longCycles };
+      }
+
+      // ─── Energy Balance Verification ────────────────────────────
+      // kVAh² should approximately equal kWh² + kVARh²
+      // (power triangle at the energy level over each billing cycle)
+      verifyEnergyBalance(monthly) {
+        const anomalies = [];
+        for (const m of monthly) {
+          if (m.kwh > 0 && m.kvah > 0 && m.kvarhLag >= 0) {
+            const calculated = Math.sqrt(m.kwh ** 2 + m.kvarhLag ** 2);
+            const deviation = Math.abs(calculated - m.kvah) / m.kvah * 100;
+            if (deviation > 5) {
+              anomalies.push({ month: m.label, kwh: m.kwh, kvah: m.kvah, kvarhLag: m.kvarhLag, calculated, deviation });
+            }
+          }
+        }
+        return anomalies;
+      }
+
+      // ─── Consumption Gradient Analysis ──────────────────────────
+      // Rate of change between consecutive intervals shouldn't show
+      // physically impossible jumps (load inertia constraint).
+      analyzeConsumptionGradient() {
+        if (this.loadSurvey.length < 10) return null;
+        const gradients = [];
+        let impossibleJumps = 0;
+        for (let i = 1; i < this.loadSurvey.length; i++) {
+          const prev = safeFloat(this.loadSurvey[i - 1].KWH);
+          const curr = safeFloat(this.loadSurvey[i].KWH);
+          if (prev > 0.01) {
+            const gradient = (curr - prev) / prev * 100;
+            gradients.push({ index: i, gradient, prev, curr });
+            // A 500%+ increase in a single 30-min step is physically suspicious
+            if (gradient > 500 || gradient < -90) impossibleJumps++;
+          }
+        }
+        const avgGradient = gradients.length > 0 ? gradients.reduce((s, g) => s + Math.abs(g.gradient), 0) / gradients.length : 0;
+        const maxGradient = gradients.length > 0 ? Math.max(...gradients.map(g => Math.abs(g.gradient))) : 0;
+
+        return { totalGradients: gradients.length, impossibleJumps, avgGradient, maxGradient };
+      }
+
+      generateFindings({ counters, reconciliation, gaps, nightAnomaly, phaseImbalance, todValidation, pfTrend, mdAnomaly, monthly, consumptionDrop, zeroConsumption, singlePhaseOp, reverseEnergy, kvahKwhRatio, consumptionVolatility, peakOffPeakRatio, estimatedRevenueLoss, benfords, powerTriangle, cusum, loadEntropy, weekdayWeekend, autocorrelation, currentPowerCorr, billingRegularity, energyBalance, consumptionGradient }) {
+        const findings = [];
+        const bc = counters.billingCount || 1;
+        const tamperRate = counters.tamperCount / bc;
+
+        // F-01: Tamper Count Per Billing Cycle
+        let f01Sev = 'INFO', f01Pts = 0;
+        if (tamperRate > 10) { f01Sev = 'CRITICAL'; f01Pts = 35; }
+        else if (tamperRate > 5) { f01Sev = 'HIGH'; f01Pts = 25; }
+        else if (tamperRate > 2) { f01Sev = 'MEDIUM'; f01Pts = 15; }
+        else if (tamperRate > 0) { f01Sev = 'LOW'; f01Pts = 5; }
+        if (counters.tamperCount > 0) {
+          const comparisonText = tamperRate > 5 ? `This rate is ${(tamperRate / 2).toFixed(0)}× the industry-typical threshold of 2 events/cycle for healthy meters` : 'This rate is within common ranges but warrants monitoring';
+          findings.push({
+            id: 'F-01', name: 'Tamper Count Per Billing Cycle', severity: f01Sev,
+            value: tamperRate.toFixed(1) + '/cycle', threshold: 'CRITICAL > 10, HIGH 5–10, MEDIUM 2–5',
+            description: `Meter has recorded ${counters.tamperCount} tamper events across ${bc} billing cycles, averaging ${tamperRate.toFixed(1)} events per cycle. ${comparisonText}. Tamper events are logged when the meter detects magnetic interference, cover removal, terminal tampering, or reverse current flow. At this rate, the meter is registering a new tamper event approximately every ${(30 / tamperRate).toFixed(0)} days.`,
+            recommendation: f01Sev === 'CRITICAL'
+              ? '■ IMMEDIATE: Deploy field team within 24 hours for physical inspection. ■ Check meter enclosure for magnet marks, scratches, or drill holes. ■ Photograph all CT/PT wiring. ■ Compare meter serial on nameplate vs AMR database. ■ File preliminary theft FIR if bypass evidence found.'
+              : '■ Schedule inspection within 1 week. ■ Check for environmental causes (e.g., nearby heavy machinery causing false tamper triggers). ■ Review tamper log timestamps for patterns (clustered at night = deliberate).',
+            points: f01Pts
+          });
+        }
+
+        // F-02: Tamper Count Absolute Value
+        let f02Sev = 'INFO', f02Pts = 0;
+        if (counters.tamperCount > 500) { f02Sev = 'CRITICAL'; f02Pts = 35; }
+        else if (counters.tamperCount > 100) { f02Sev = 'HIGH'; f02Pts = 25; }
+        else if (counters.tamperCount > 20) { f02Sev = 'MEDIUM'; f02Pts = 15; }
+        else if (counters.tamperCount > 0) { f02Sev = 'LOW'; f02Pts = 5; }
+        if (counters.tamperCount > 0) {
+          const per100days = (tamperRate / 30 * 100).toFixed(1);
+          findings.push({
+            id: 'F-02', name: 'Tamper Count Absolute', severity: f02Sev,
+            value: counters.tamperCount.toString(), threshold: 'CRITICAL > 500, HIGH > 100, MEDIUM > 20',
+            description: `Cumulative tamper count of ${counters.tamperCount} is ${f02Sev}. This translates to approximately ${per100days} tamper events per 100 days of operation. For comparison, a meter in a clean environment with no tampering typically records 0–5 tamper events over its lifetime from voltage fluctuations or maintenance access. A count of ${counters.tamperCount} far exceeds any legitimate cause.`,
+            recommendation: '■ Download and analyze the tamper event log with timestamps and event type codes. ■ Cross-reference each tamper date with field visit records and outage logs. ■ Check if tamper events cluster around billing dates (suggests reading manipulation) or are spread across off-hours (suggests ongoing bypass). ■ Flag for immediate audit if no authorized field visits correlate with tamper dates.',
+            points: f02Pts
+          });
+        }
+
+        // F-03: Load-Billing Reconciliation Mismatch
+        if (reconciliation.length > 0) {
+          const worst = reconciliation.reduce((a, b) => b.mismatchPct > a.mismatchPct ? b : a);
+          const avgMismatch = reconciliation.reduce((s, r) => s + r.mismatchPct, 0) / reconciliation.length;
+          const monthsAbove5 = reconciliation.filter(r => r.mismatchPct > 5).length;
+          let f03Sev = 'INFO', f03Pts = 0;
+          if (worst.mismatchPct > 15) { f03Sev = 'CRITICAL'; f03Pts = 25; }
+          else if (worst.mismatchPct > 10) { f03Sev = 'HIGH'; f03Pts = 18; }
+          else if (worst.mismatchPct > 5) { f03Sev = 'MEDIUM'; f03Pts = 10; }
+          else if (worst.mismatchPct > 2) { f03Sev = 'LOW'; f03Pts = 5; }
+          if (worst.mismatchPct > 2) {
+            const direction = worst.surveyLess ? 'LESS than billed (possible interval data suppression or CT mismatch)' : 'MORE than billed (possible billing register manipulation)';
+            findings.push({
+              id: 'F-03', name: 'Load–Billing Reconciliation Mismatch', severity: f03Sev,
+              value: worst.mismatchPct.toFixed(1) + '%', threshold: 'CRITICAL > 15%, HIGH 10–15%',
+              description: `Worst month (${worst.label}): Load survey sum = ${formatNum(worst.surveyKWH, 1)} kWh vs billing register = ${formatNum(worst.billingKWH, 1)} kWh — ${worst.mismatchPct.toFixed(1)}% discrepancy. The interval total is ${direction}. Average mismatch across all months: ${avgMismatch.toFixed(1)}%. ${monthsAbove5} of ${reconciliation.length} months exceed the 5% concern threshold. In a properly functioning meter, the sum of all 30-minute interval readings should match the cumulative billing register within 1–2% accounting for rounding.`,
+              recommendation: '■ CRITICAL: Request meter internal memory dump via optical port. ■ Compare display reading vs AMR download for same date. ■ Verify CT ratio programming matches physical CT installed. ■ Check if PT secondary voltage matches meter rated voltage. ■ If persistent mismatch in one direction: likely systematic diversion.',
+              points: f03Pts
+            });
+          }
+        }
+
+        // F-04: Load Survey Missing Intervals
+        if (gaps.totalMissing > 0) {
+          let f04Sev = 'INFO', f04Pts = 0;
+          if (gaps.major > 10) { f04Sev = 'HIGH'; f04Pts = 15; }
+          else if (gaps.major >= 5) { f04Sev = 'MEDIUM'; f04Pts = 10; }
+          else if (gaps.major >= 1) { f04Sev = 'LOW'; f04Pts = 5; }
+          const totalHours = gaps.gapList.reduce((s, g) => s + g.gapMinutes / 60, 0);
+          findings.push({
+            id: 'F-04', name: 'Load Survey Missing Intervals', severity: f04Sev,
+            value: `${gaps.totalMissing} missing (${totalHours.toFixed(0)} hrs)`, threshold: 'HIGH > 10 major gaps',
+            description: `Found ${gaps.totalMissing} missing 30-minute recording intervals: ${gaps.major} major gaps (>8 hrs), ${gaps.significant} significant gaps (2–8 hrs), and ${gaps.minor} minor gaps (<2 hrs). Total unrecorded time: ${totalHours.toFixed(1)} hours. Legitimate gaps should correlate with logged power failures (${counters.powerFailures} recorded). The ratio of gap hours to power failure count is ${counters.powerFailures > 0 ? (totalHours / counters.powerFailures).toFixed(1) : '∞'} — ${counters.powerFailures > 0 && totalHours / counters.powerFailures > 5 ? 'significantly higher than expected (each power failure should cause ~1 gap)' : 'within expected range'}.`,
+            recommendation: '■ Map each major gap to the power outage register — unmatched gaps are suspicious. ■ Check if gaps coincide with weekends/holidays (deliberate disconnection). ■ Obtain feeder-level outage data to verify area-wide outages. ■ If gaps cluster at month-end: possible data clearing before billing read.',
+            points: f04Pts
+          });
+        }
+
+        // F-05: Unexplained Major Load Gaps
+        const unexplainedMajor = gaps.major;
+        if (unexplainedMajor > 0) {
+          let f05Sev = 'LOW', f05Pts = 5;
+          if (unexplainedMajor > 5) { f05Sev = 'CRITICAL'; f05Pts = 15; }
+          else if (unexplainedMajor > 2) { f05Sev = 'HIGH'; f05Pts = 10; }
+          const longestGap = gaps.gapList.length > 0 ? Math.max(...gaps.gapList.map(g => g.gapMinutes)) : 0;
+          findings.push({
+            id: 'F-05', name: 'Unexplained Major Load Gaps', severity: f05Sev,
+            value: unexplainedMajor.toString() + ' gaps', threshold: 'CRITICAL > 5',
+            description: `Detected ${unexplainedMajor} load survey gaps exceeding 8 hours. Longest gap: ${(longestGap / 60).toFixed(1)} hours (${(longestGap / 1440).toFixed(1)} days). These gaps represent periods where interval consumption data was not recorded despite the meter being powered. Possible causes: (1) Deliberate memory clearing via programming port, (2) CT/PT circuit disconnection, (3) Meter communication failure (less likely for this duration), (4) Meter firmware crash and restart.`,
+            recommendation: '■ Correlate gap timestamps with programming event counter — if programming count increased around gap dates, this indicates deliberate memory manipulation. ■ Check meter event log for "cover open" events near gap dates. ■ Obtain substation feeder records to verify if these were area-wide outages. ■ Request secondary meter data (check meter or DT meter) for the same period.',
+            points: f05Pts
+          });
+        }
+
+        // F-06: Phase Current Imbalance
+        if (phaseImbalance.total > 0 && phaseImbalance.imbalancedPct > 5) {
+          let f06Sev = 'LOW', f06Pts = 3;
+          if (phaseImbalance.imbalancedPct > 20) { f06Sev = 'HIGH'; f06Pts = 10; }
+          else if (phaseImbalance.imbalancedPct > 10) { f06Sev = 'MEDIUM'; f06Pts = 6; }
+          findings.push({
+            id: 'F-06', name: 'Phase Current Imbalance', severity: f06Sev,
+            value: phaseImbalance.imbalancedPct.toFixed(0) + '% of intervals', threshold: 'HIGH > 20% intervals',
+            description: `Phase current imbalance exceeded 15% in ${phaseImbalance.imbalancedPct.toFixed(0)}% of ${phaseImbalance.total} recorded intervals. ${phaseImbalance.severe} intervals showed severe imbalance (>30%). In a 3-phase installation, balanced loads produce roughly equal current on all three phases. Persistent imbalance — especially when one phase consistently reads near zero — is a strong indicator of: (1) CT bypass on one phase (load flows but is not measured), (2) CT short-circuit (current flows through CT primary but secondary is shorted), or (3) Legitimate single-phase heavy load (less common in industrial settings).`,
+            recommendation: '■ PRIORITY: Inspect all three CT secondary connections. ■ Measure current on each phase with clamp meter and compare with meter reading in real-time. ■ Check for jumper wires between CT terminals. ■ Verify CT polarity marks match installation. ■ If one phase consistently reads zero: that CT is likely bypassed or failed.',
+            points: f06Pts
+          });
+        }
+
+        // F-07: Meter Programming Events
+        if (counters.programmingCount > 2) {
+          let f07Sev = 'LOW', f07Pts = 3;
+          if (counters.programmingCount > 10) { f07Sev = 'HIGH'; f07Pts = 10; }
+          else if (counters.programmingCount > 5) { f07Sev = 'MEDIUM'; f07Pts = 6; }
+          findings.push({
+            id: 'F-07', name: 'Meter Programming Events', severity: f07Sev,
+            value: counters.programmingCount.toString() + ' changes', threshold: 'HIGH > 10, MEDIUM 5–10',
+            description: `The meter parameters have been modified ${counters.programmingCount} times since installation. Each programming event changes one or more of: CT/PT ratio settings, TOD schedule, demand integration period, communication parameters, or billing date. A typical meter should see 1–3 programming events (initial commissioning + 1–2 updates). ${counters.programmingCount} changes is ${counters.programmingCount > 10 ? 'highly suspicious — possible unauthorized access to the programming port' : 'elevated — verify each change was authorized'}. Unauthorized CT ratio changes can multiply or divide the recorded consumption by a fixed factor.`,
+            recommendation: '■ CRITICAL: Retrieve programming log with timestamps and parameter change details. ■ Cross-verify with DISCOM work order system — every programming change should have an authorized work order. ■ Verify current CT ratio in meter (via programming port) matches the physical CT ratio printed on the CT nameplate. ■ If CT ratio was changed without authorization → direct evidence of meter manipulation. ■ Calculate revenue loss = actual CT ratio / programmed CT ratio × consumption.',
+            points: f07Pts
+          });
+        }
+
+        // F-08: TOD Sum vs Cumulative Total Mismatch
+        if (todValidation && todValidation.mismatchPct > 0.5) {
+          let f08Sev = 'LOW', f08Pts = 3;
+          if (todValidation.mismatchPct > 2) { f08Sev = 'MEDIUM'; f08Pts = 5; }
+          findings.push({
+            id: 'F-08', name: 'TOD Sum vs Cumulative Mismatch', severity: f08Sev,
+            value: todValidation.mismatchPct.toFixed(2) + '%', threshold: 'MEDIUM > 2%',
+            description: `Sum of all 8 TOD register values (${formatNum(todValidation.sumTOD, 1)} kWh) differs from the cumulative register (${formatNum(todValidation.cumulativeKWH, 1)} kWh) by ${todValidation.mismatchPct.toFixed(2)}%. In a properly functioning meter, the sum of Time-of-Day registers should exactly equal the cumulative kWh register since each unit of energy is counted in exactly one TOD slot. A mismatch indicates either: (1) Register integrity failure, (2) Firmware bug causing energy attribution errors, or (3) Possible register value manipulation.`,
+            recommendation: '■ Compare meter display TOD registers with AMR-downloaded values. ■ Check if the mismatch is growing over time (firmware bug) or was a one-time event. ■ If growing: escalate to meter manufacturer for firmware investigation. ■ If one-time: possible manual register editing via programming port.',
+            points: f08Pts
+          });
+        }
+
+        // F-09: Night Load Anomaly
+        if (nightAnomaly.anomalousDays.length > 0) {
+          const zeroNights = nightAnomaly.anomalousDays.filter(d => d.type === 'zero-night');
+          const suddenDrops = nightAnomaly.anomalousDays.filter(d => d.type === 'sudden-drop');
+          const spikes = nightAnomaly.anomalousDays.filter(d => d.type === 'spike');
+          const count = zeroNights.length;
+          let f09Sev = 'LOW', f09Pts = 3;
+          if (count > 10) { f09Sev = 'CRITICAL'; f09Pts = 15; }
+          else if (count > 5) { f09Sev = 'HIGH'; f09Pts = 10; }
+          else if (count > 2) { f09Sev = 'MEDIUM'; f09Pts = 6; }
+          if (count > 0 || suddenDrops.length > 0) {
+            findings.push({
+              id: 'F-09', name: 'Night Load Anomaly', severity: f09Sev,
+              value: `${count} zero nights, ${suddenDrops.length} drops, ${spikes.length} spikes`, threshold: 'CRITICAL > 10 zero nights',
+              description: `Night load analysis detected: ${count} nights with absolute zero consumption despite active daytime load, ${suddenDrops.length} nights with sudden >70% drop from rolling average, and ${spikes.length} nights with >300% spikes. Zero night load is the strongest indicator of a timed bypass — a device (timer relay or contactor) that disconnects the CT secondary circuit during specific hours, causing the meter to record zero consumption while the load continues drawing power through a bypass cable. The pattern of zero nights is: ${zeroNights.slice(0, 3).map(d => d.date).join(', ')}${zeroNights.length > 3 ? ` and ${zeroNights.length - 3} more` : ''}.`,
+              recommendation: '■ HIGH PRIORITY: Conduct unannounced inspection between 22:00–04:00. ■ Check for: timer relays, contactors, or remote-controlled switches near the meter. ■ Compare meter night reading with actual load at the time of inspection. ■ Photograph any bypass cables or unauthorized connections. ■ If confirmed: calculate stolen energy = avg daytime kWh × night hours × affected days.',
+              points: f09Pts
+            });
+          }
+        }
+
+        // F-10: Power Factor Sudden Jump
+        for (const jump of pfTrend) {
+          findings.push({
+            id: 'F-10', name: 'Power Factor Sudden Jump', severity: 'MEDIUM',
+            value: `${jump.pfOld.toFixed(2)} → ${jump.pfNew.toFixed(2)} (Δ${jump.diff.toFixed(3)})`, threshold: 'Jump > 0.03 in single month',
+            description: `Power Factor improved from ${jump.pfOld.toFixed(2)} to ${jump.pfNew.toFixed(2)} in ${jump.month} — a ${(jump.diff * 100).toFixed(1)} percentage point jump in a single cycle. Natural PF changes are gradual (0.005–0.01/month from load changes). A sudden jump of ${jump.diff.toFixed(3)} suggests: (1) Capacitor bank installed without notification, (2) CT ratio altered to skew apparent/active power measurement, or (3) Measurement path manipulation affecting reactive energy sensing.`,
+            recommendation: '■ Verify if a capacitor bank was installed — check with consumer and site visit records. ■ If no capacitor bank: check CT ratio programming and PT wiring. ■ Compare PF reading from the meter with a portable power quality analyzer reading at the same time. ■ Check if the PF jump coincides with a programming event.',
+            points: 5
+          });
+        }
+
+        // F-11: Maximum Demand Sudden Drop
+        for (const md of mdAnomaly) {
+          findings.push({
+            id: 'F-11', name: 'Max Demand Sudden Drop', severity: 'HIGH',
+            value: `${md.mdOld.toFixed(1)} → ${md.mdNew.toFixed(1)} kVA (−${md.dropPct.toFixed(0)}%)`, threshold: 'Drop > 30% with stable consumption',
+            description: `Maximum Demand dropped from ${md.mdOld.toFixed(1)} kVA to ${md.mdNew.toFixed(1)} kVA (${md.dropPct.toFixed(0)}% decline) in ${md.month}, while monthly consumption ${md.consumptionChange}. The MD register captures the highest 30-minute average demand in the billing period. If consumption stays the same but MD drops sharply, it means: (1) The peak usage pattern magically flattened (unlikely), (2) The MD register was reset via programming, (3) The integration period was altered, or (4) CT ratio was changed to reduce apparent demand. MD-related demand charges can constitute 30–50% of industrial electricity bills.`,
+            recommendation: '■ Check if demand integration period was changed in programming log. ■ Verify MD register was not manually reset. ■ Compare MD value with real-time demand reading from the meter. ■ Calculate financial impact: MD difference × demand charge rate (₹/kVA/month). ■ If MD reset confirmed without authorization → strong evidence of billing fraud.',
+            points: 10
+          });
+        }
+
+        // F-12: Power Failure Rate
+        const pfRate = counters.powerFailures / bc;
+        if (pfRate > 5) {
+          let f12Sev = 'LOW', f12Pts = 3;
+          if (pfRate > 10) { f12Sev = 'MEDIUM'; f12Pts = 5; }
+          findings.push({
+            id: 'F-12', name: 'Power Failure Rate', severity: f12Sev,
+            value: pfRate.toFixed(1) + '/cycle (' + counters.powerFailures + ' total)', threshold: 'MEDIUM > 10/cycle',
+            description: `${counters.powerFailures} power failures logged across ${bc} billing cycles = ${pfRate.toFixed(1)} per cycle. While power failures are common in Indian distribution networks, an excessively high rate can indicate: (1) Deliberate supply disconnection/reconnection to reset meter state, (2) Loose connections causing intermittent supply, or (3) Genuine area supply quality issues. Cross-referencing with the load survey gap data: ${gaps.totalMissing} intervals are missing, which should roughly correlate with ${counters.powerFailures} power failures if legitimate.`,
+            recommendation: '■ Compare power failure count with area outage records for the same period. ■ If failure count >> area outages → supply is being deliberately interrupted at the meter. ■ Check meter supply cable for loose/tampered connections. ■ Review if power failures correlate with tamper events (same timestamp = coordinated tampering).',
+            points: f12Pts
+          });
+        }
+
+        // F-13: Load Factor Assessment
+        if (monthly.length > 0) {
+          const avgLF = monthly.reduce((s, m) => s + m.loadFactor, 0) / monthly.length;
+          const minLF = Math.min(...monthly.map(m => m.loadFactor));
+          const maxLF = Math.max(...monthly.map(m => m.loadFactor));
+          let f13Sev = 'INFO', f13Pts = 0;
+          if (avgLF < 30 && counters.tamperCount > 20) { f13Sev = 'MEDIUM'; f13Pts = 5; }
+          findings.push({
+            id: 'F-13', name: 'Load Factor Assessment', severity: f13Sev,
+            value: avgLF.toFixed(1) + '% (range: ' + minLF.toFixed(0) + '–' + maxLF.toFixed(0) + '%)', threshold: '< 30% + high tampers → MEDIUM',
+            description: `Average load factor: ${avgLF.toFixed(1)}% (min ${minLF.toFixed(1)}% in ${monthly[monthly.indexOf(monthly.find(m => m.loadFactor === minLF))]?.label || '—'}, max ${maxLF.toFixed(1)}%). Load factor represents actual usage as a percentage of maximum possible output. Industrial consumers typically have 40–70% LF. ${avgLF < 30 ? 'A load factor below 30% combined with high tamper events (' + counters.tamperCount + ') suggests the meter may be recording less consumption than actual — making the consumer appear to have peaky, inefficient load patterns when in fact some base load is being diverted.' : 'The load factor is within normal industrial ranges.'}`,
+            recommendation: f13Sev === 'MEDIUM'
+              ? '■ Compare load factor with the consumer\'s declared connected load and contract demand. ■ If LF < 30% but connected load suggests continuous operation → consumption is likely being under-recorded. ■ Install check meter temporarily to verify.'
+              : 'Informational — no action required. Load factor is consistent with declared usage patterns.',
+            points: f13Pts
+          });
+        }
+
+        // F-14: Phase Voltage Deviation
+        if (phaseImbalance.voltageDeviationPct > 5) {
+          let f14Sev = 'LOW', f14Pts = 3;
+          if (phaseImbalance.voltageDeviationPct > 15) { f14Sev = 'MEDIUM'; f14Pts = 5; }
+          findings.push({
+            id: 'F-14', name: 'Phase Voltage Deviation', severity: f14Sev,
+            value: phaseImbalance.voltageDeviationPct.toFixed(0) + '% of intervals', threshold: 'MEDIUM > 15% intervals',
+            description: `Phase voltage imbalance (any phase deviating >10% from 3-phase average) detected in ${phaseImbalance.voltageDeviationPct.toFixed(0)}% of recorded intervals. Voltage is typically well-balanced at the meter (it comes from the distribution transformer). Persistent voltage imbalance at the meter may indicate: (1) PT wiring interference on one phase, (2) Loose PT connection causing voltage drop, (3) PT fuse blown on one phase (meter records lower consumption on that phase). Note: Unlike current imbalance which can be caused by unbalanced loads, voltage imbalance at the meter point is almost always a supply or wiring issue.`,
+            recommendation: '■ Measure phase voltages at meter terminals with a multimeter and compare with meter display. ■ Check all PT fuses — a blown fuse causes that phase to read zero voltage, reducing measured consumption by ~33%. ■ Verify PT secondary wiring is intact and properly terminated. ■ If one phase voltage consistently reads low: check PT connections on that phase.',
+            points: f14Pts
+          });
+        }
+
+        // ─── NEW FINDINGS (F-15 through F-22) ──────────────────────
+
+        // F-15: Sudden Consumption Drop
+        if (consumptionDrop.length > 0) {
+          const worst = consumptionDrop.reduce((a, b) => b.dropPct > a.dropPct ? b : a);
+          let f15Sev = 'MEDIUM', f15Pts = 6;
+          if (worst.dropPct > 70 && !worst.nextRecovers) { f15Sev = 'HIGH'; f15Pts = 10; }
+          if (consumptionDrop.length > 2) { f15Sev = 'CRITICAL'; f15Pts = 15; }
+          findings.push({
+            id: 'F-15', name: 'Sudden Consumption Drop', severity: f15Sev,
+            value: `${worst.dropPct.toFixed(0)}% drop in ${worst.month}`, threshold: 'HIGH > 70% persistent drop',
+            description: `Consumption dropped from ${formatNum(worst.prevKWH, 0)} kWh (${worst.prevMonth}) to ${formatNum(worst.currKWH, 0)} kWh (${worst.month}) — a ${worst.dropPct.toFixed(0)}% decline. ${worst.nextRecovers ? 'The following month recovered to near-previous levels, suggesting a seasonal or operational pause.' : 'The consumption did NOT recover in subsequent months, suggesting a sustained change in metering accuracy rather than genuine load reduction.'} Total months with >40% consumption drops: ${consumptionDrop.length}. A sudden, sustained consumption drop without corresponding business closure or process change is one of the strongest indicators of new theft activity — the consumer\'s actual load continues but the meter records less.`,
+            recommendation: worst.nextRecovers
+              ? '■ Verify if the consumer had a shutdown or holiday during ' + worst.month + '. ■ Check SCADA/DT meter data for the same period. ■ If no legitimate reason found, schedule inspection.'
+              : '■ URGENT: Consumption did not recover — this suggests ongoing theft starting around ' + worst.month + '. ■ Contact the consumer for explanation of load reduction. ■ Cross-verify with contract demand and connected load records. ■ Install check meter immediately. ■ Calculate potential revenue loss = (' + formatNum(worst.prevKWH - worst.currKWH, 0) + ' kWh/month × months since drop × tariff rate).',
+            points: f15Pts
+          });
+        }
+
+        // F-16: Extended Zero Consumption Periods
+        if (zeroConsumption.periods.length > 0) {
+          const longPeriods = zeroConsumption.periods.filter(p => p.hours > 12);
+          let f16Sev = 'LOW', f16Pts = 3;
+          if (longPeriods.length > 5) { f16Sev = 'HIGH'; f16Pts = 10; }
+          else if (longPeriods.length > 2) { f16Sev = 'MEDIUM'; f16Pts = 6; }
+          findings.push({
+            id: 'F-16', name: 'Extended Zero Consumption Periods', severity: f16Sev,
+            value: `${zeroConsumption.periods.length} periods (${zeroConsumption.totalHours.toFixed(0)} hrs total)`, threshold: 'HIGH > 5 periods of 12+ hours',
+            description: `Detected ${zeroConsumption.periods.length} periods of consecutive zero kWh readings, totaling ${zeroConsumption.totalHours.toFixed(1)} hours. ${longPeriods.length} periods exceeded 12 hours. While zero consumption can occur during genuine shutdowns, extended periods with zero kWh in the load survey but non-zero cumulative register advancement suggests the meter is recording but the interval logger is suppressed — a known firmware exploit on certain meter models.`,
+            recommendation: '■ Check if zero periods coincide with weekends/holidays (legitimate). ■ If zero periods occur on working days for an industrial consumer → highly suspicious. ■ Compare total consumed kWh from cumulative register vs sum of interval data — large discrepancy confirms interval suppression. ■ Check meter firmware version against known vulnerable versions.',
+            points: f16Pts
+          });
+        }
+
+        // F-17: Single Phase Operation
+        if (singlePhaseOp.pct > 5 && singlePhaseOp.count > 10) {
+          let f17Sev = 'MEDIUM', f17Pts = 6;
+          if (singlePhaseOp.pct > 20) { f17Sev = 'CRITICAL'; f17Pts = 15; }
+          else if (singlePhaseOp.pct > 10) { f17Sev = 'HIGH'; f17Pts = 10; }
+          findings.push({
+            id: 'F-17', name: 'Single/Two Phase Operation', severity: f17Sev,
+            value: `${singlePhaseOp.pct.toFixed(1)}% intervals (${singlePhaseOp.count} of ${singlePhaseOp.total})`, threshold: 'CRITICAL > 20%, HIGH > 10%',
+            description: `In ${singlePhaseOp.pct.toFixed(1)}% of load-carrying intervals, one or more phases had near-zero current (<0.05A) while other phases carried significant load. The most frequently affected phase: Phase ${singlePhaseOp.dominantPhase} (zero in ${singlePhaseOp.dominantCount} intervals). Breakdown — R-phase down: ${singlePhaseOp.phaseDown.R}, Y-phase down: ${singlePhaseOp.phaseDown.Y}, B-phase down: ${singlePhaseOp.phaseDown.B}. In a 3-phase CT-operated meter, if one CT is bypassed (secondary shorted or disconnected), that phase reads near-zero current while load continues on that phase unmeasured. This causes the meter to under-record by approximately 33%.`,
+            recommendation: '■ IMMEDIATE: Check Phase ' + (singlePhaseOp.dominantPhase || 'with most zeros') + ' CT — it is the most likely bypassed. ■ Open CT junction box and verify all secondary connections. ■ Look for shorting links across CT terminals. ■ Test each CT with primary injection test. ■ Estimated under-recording = ~33% × affected intervals = potential significant revenue loss.',
+            points: f17Pts
+          });
+        }
+
+        // F-18: Reverse Energy / Negative Consumption
+        if (reverseEnergy.detected) {
+          const negCount = reverseEnergy.negativeMonths.length;
+          let f18Sev = 'HIGH', f18Pts = 10;
+          if (negCount > 2) { f18Sev = 'CRITICAL'; f18Pts = 20; }
+          findings.push({
+            id: 'F-18', name: 'Reverse Energy / Meter Rollback', severity: f18Sev,
+            value: negCount > 0 ? `${negCount} months with negative consumption` : `Lead/Lag ratio: ${reverseEnergy.ratio.toFixed(2)}`,
+            threshold: 'Any negative monthly consumption',
+            description: negCount > 0
+              ? `Detected ${negCount} billing months where cumulative kWh DECREASED — the register went backwards. Affected months: ${reverseEnergy.negativeMonths.map(m => m.month + ' (' + m.diff.toFixed(0) + ' kWh)').join(', ')}. A cumulative register should NEVER decrease. This is definitive evidence of either: (1) Meter register manipulation via programming port, (2) CT polarity reversal causing reverse energy registration, (3) Unauthorized solar/DG backfeed without net metering agreement. This is among the strongest evidence of meter tampering.`
+              : `Leading reactive energy (KVARH Lead: ${reverseEnergy.kvarhLead.toFixed(0)}) is ${(reverseEnergy.ratio * 100).toFixed(0)}% of lagging reactive energy (KVARH Lag: ${reverseEnergy.kvarhLag.toFixed(0)}) — this ratio is unusually high and may indicate CT polarity issues causing reverse energy flow measurement.`,
+            recommendation: '■ CRITICAL: If cumulative register decreased, this is direct evidence of tampering — file FIR immediately. ■ Download meter event log for register write events. ■ Check CT polarity on all phases with phase angle test. ■ Verify no unauthorized generation (solar/DG) is connected behind the meter. ■ Calculate exact stolen energy = sum of all negative register movements.',
+            points: f18Pts
+          });
+        }
+
+        // F-19: kVAh/kWh Ratio Anomaly
+        if (kvahKwhRatio.length > 0) {
+          const ratioBelow = kvahKwhRatio.filter(a => a.ratio < 0.98);
+          const pfMismatch = kvahKwhRatio.filter(a => a.type === 'pf-mismatch');
+          findings.push({
+            id: 'F-19', name: 'kVAh/kWh Register Inconsistency', severity: 'MEDIUM',
+            value: `${kvahKwhRatio.length} anomalous months`, threshold: 'kVAh/kWh ratio < 0.98 or PF mismatch',
+            description: `Detected ${kvahKwhRatio.length} months with energy register inconsistencies. ${ratioBelow.length > 0 ? `In ${ratioBelow.length} months, kVAh was LESS than kWh (ratio < 0.98). This is physically impossible — apparent energy (kVAh) must always be ≥ active energy (kWh) since kVAh = kWh / PF. A ratio below 1.0 indicates one of the registers is being tampered with.` : ''} ${pfMismatch.length > 0 ? `In ${pfMismatch.length} months, the kVAh/kWh ratio implied a very poor PF while the PF register showed good PF — these cannot both be correct.` : ''} Either the kWh register is being inflated or the kVAh register is being suppressed through register manipulation.`,
+            recommendation: '■ Compare kVAh and kWh register values via direct display read vs AMR download. ■ Verify the energy calculation path in the meter is intact. ■ Check if kVAh is used for billing — if only kWh is billed, kVAh manipulation might be masking a kWh issue. ■ Verify PF reading with external power analyzer.',
+            points: 5
+          });
+        }
+
+        // F-20: Consumption Volatility
+        if (consumptionVolatility.cv > 40 && monthly.length > 3) {
+          let f20Sev = 'LOW', f20Pts = 3;
+          if (consumptionVolatility.cv > 80) { f20Sev = 'MEDIUM'; f20Pts = 5; }
+          if (consumptionVolatility.outliers.length > 2) { f20Sev = 'HIGH'; f20Pts = 8; }
+          findings.push({
+            id: 'F-20', name: 'Consumption Volatility', severity: f20Sev,
+            value: `CV=${consumptionVolatility.cv.toFixed(0)}% (${consumptionVolatility.outliers.length} outliers)`, threshold: 'HIGH > 80% CV + outliers',
+            description: `Monthly consumption coefficient of variation is ${consumptionVolatility.cv.toFixed(1)}% (mean: ${formatNum(consumptionVolatility.mean, 0)} kWh, std dev: ${formatNum(consumptionVolatility.stddev, 0)} kWh). ${consumptionVolatility.outliers.length} months are statistical outliers (>2σ from mean): ${consumptionVolatility.outliers.map(o => o.month + ' (' + formatNum(parseFloat(o.deviations), 1) + 'σ)').join(', ')}. While some variation is normal (seasonal, production cycles), extreme volatility combined with tamper indicators suggests intermittent theft — periods where the bypass is active vs inactive.`,
+            recommendation: '■ Review outlier months for correlation with tamper events. ■ Check if low-consumption months show increased tamper count. ■ Compare consumption pattern with the consumer\'s production/business records. ■ If consumption is erratic but production is steady → intermittent bypass likely.',
+            points: f20Pts
+          });
+        }
+
+        // F-21: Peak/Off-Peak Ratio Anomaly
+        if (peakOffPeakRatio && peakOffPeakRatio.ratio < 0.5 && peakOffPeakRatio.avgPeak > 0) {
+          findings.push({
+            id: 'F-21', name: 'Abnormal Peak/Off-Peak Ratio', severity: 'MEDIUM',
+            value: `Ratio: ${peakOffPeakRatio.ratio.toFixed(2)} (Peak avg: ${peakOffPeakRatio.avgPeak.toFixed(3)} vs Off-peak avg: ${peakOffPeakRatio.avgOffPeak.toFixed(3)} kWh)`,
+            threshold: 'Peak/Off-peak < 0.5',
+            description: `Average per-interval consumption during peak hours (06:00–10:00, 18:00–22:00) is only ${(peakOffPeakRatio.ratio * 100).toFixed(0)}% of off-peak consumption. For most industrial/commercial consumers, peak-hour consumption is higher (ratio > 1.0) due to daytime operations. A very low ratio suggests the meter may be under-recording during peak hours when tariff rates are highest — this could be a targeted TOD bypass that specifically suppresses consumption during expensive time slots.`,
+            recommendation: '■ Compare the consumer\'s declared operating hours with the load profile. ■ If they operate during peak hours but consumption shows near-zero → targeted TOD bypass. ■ Check TOD register values against interval summation for peak slots specifically. ■ Verify TOD clock in meter is set correctly (wrong clock = wrong slot attribution).',
+            points: 5
+          });
+        }
+
+        // F-22: Estimated Revenue Loss
+        if (estimatedRevenueLoss.estimatedLossKWH > 100) {
+          let f22Sev = 'INFO', f22Pts = 0;
+          if (estimatedRevenueLoss.estimatedLossINR > 50000) { f22Sev = 'HIGH'; f22Pts = 5; }
+          else if (estimatedRevenueLoss.estimatedLossINR > 10000) { f22Sev = 'MEDIUM'; f22Pts = 3; }
+          findings.push({
+            id: 'F-22', name: 'Estimated Revenue Loss', severity: f22Sev,
+            value: `₹${formatNum(estimatedRevenueLoss.estimatedLossINR, 0)} (${formatNum(estimatedRevenueLoss.estimatedLossKWH, 0)} kWh)`,
+            threshold: 'HIGH > ₹50,000',
+            description: `Based on detected anomalies, the estimated revenue loss is ₹${formatNum(estimatedRevenueLoss.estimatedLossINR, 0)} (${formatNum(estimatedRevenueLoss.estimatedLossKWH, 0)} kWh × ₹${estimatedRevenueLoss.tariffUsed}/kWh baseline tariff). Annualized projection: ₹${formatNum(estimatedRevenueLoss.annualizedLossINR, 0)}/year. Methodology: ${estimatedRevenueLoss.methodology.join('; ') || 'No direct loss indicators detected — estimate based on consumption pattern anomalies.'}. Note: This is a conservative estimate. Actual loss may be higher once CT ratio manipulation, MD tampering, and night bypass are factored in after physical inspection.`,
+            recommendation: '■ Use this estimate in the theft assessment report for DISCOM management. ■ The actual recoverable amount should be calculated after physical inspection confirms the theft method. ■ For CT bypass: multiply the estimate by the number of bypassed phases. ■ For meter rollback: use the negative register values as direct evidence. ■ Coordinate with billing team to calculate back-billing amount under applicable regulations.',
+            points: f22Pts
+          });
+        }
+
+        // ─── ADVANCED NON-INVASIVE FINDINGS (F-23 to F-27) ─────────
+
+        // F-23: Benford's Law Deviation
+        if (benfords && benfords.isAnomaly) {
+          findings.push({
+            id: 'F-23', name: 'Benford\'s Law Deviation', severity: 'MEDIUM',
+            value: `χ²=${benfords.chiSquared.toFixed(1)} (max digit deviation: ${benfords.maxDeviation.toFixed(1)}%)`,
+            threshold: 'χ² > 15.51 (p < 0.05)',
+            description: `Benford's Law analysis of ${benfords.totalValues} load survey readings shows statistically significant deviation (χ² = ${benfords.chiSquared.toFixed(1)}, critical = 15.51 at p=0.05). In naturally occurring meter data, the leading digit should follow a logarithmic distribution (digit 1 ≈ 30.1%, digit 2 ≈ 17.6%, etc.). Observed vs Expected: ${benfords.observed.map((o, i) => `${i+1}:${o.toFixed(1)}%/${benfords.expected[i]}%`).join(', ')}. Deviation from Benford's Law is used by forensic accountants and utilities worldwide (ESKOM South Africa, Enel Italy) as a flag for data fabrication or systematic manipulation. It does not prove theft alone but increases confidence when combined with other findings.`,
+            recommendation: '■ Correlate Benford deviation with specific time periods — check if deviation is concentrated in specific months. ■ If deviation coincides with other anomalies (tamper events, gaps), confidence of manipulation increases. ■ This analysis is used as supporting evidence in utility fraud cases globally (EPRI methodology).',
+            points: 5
+          });
+        }
+
+        // F-24: Power Triangle Inconsistency
+        if (powerTriangle && !powerTriangle.isConsistent) {
+          let f24Sev = 'MEDIUM', f24Pts = 5;
+          if (powerTriangle.vaDeviation > 20 || powerTriangle.pfDeviation > 15) { f24Sev = 'HIGH'; f24Pts = 10; }
+          findings.push({
+            id: 'F-24', name: 'Power Triangle Inconsistency', severity: f24Sev,
+            value: `VA dev: ${powerTriangle.vaDeviation.toFixed(1)}%, PF dev: ${powerTriangle.pfDeviation.toFixed(1)}%`,
+            threshold: 'VA deviation > 10% or PF deviation > 5%',
+            description: `Non-invasive power triangle verification failed. The meter independently reports Voltage (${powerTriangle.avgVoltage.toFixed(0)}V), Current (${powerTriangle.avgCurrent.toFixed(2)}A), PF (${powerTriangle.reportedPF.toFixed(3)}), Active Power (${powerTriangle.activePower.toFixed(0)}W), and Apparent Power (${powerTriangle.reportedVA.toFixed(0)}VA). Cross-validation: Calculated VA from V×I×√3 = ${powerTriangle.calculatedVA.toFixed(0)}VA vs reported ${powerTriangle.reportedVA.toFixed(0)}VA (${powerTriangle.vaDeviation.toFixed(1)}% deviation). P²+Q² vs S² deviation: ${powerTriangle.pqsDeviation.toFixed(1)}%. Calculated PF from P/S = ${powerTriangle.calculatedPF.toFixed(3)} vs reported ${powerTriangle.reportedPF.toFixed(3)} (${powerTriangle.pfDeviation.toFixed(1)}% deviation). If V, I, and P/Q/S are measured from the same CT/PT circuit, they MUST be geometrically consistent. Inconsistency means: (1) CT ratio in software ≠ physical CT, (2) PT circuit altered, or (3) Measurement module fault.`,
+            recommendation: '■ This is a powerful non-invasive check — no physical inspection needed to detect CT/PT mismatch. ■ If VA deviation > 20%: the programmed CT/PT ratio is almost certainly wrong. ■ Calculate the expected CT ratio: reported VA / calculated VA × programmed CT ratio = actual CT ratio. ■ If PF deviation > 10%: reactive energy measurement path may be compromised. ■ Document these calculations in the inspection report as preliminary evidence.',
+            points: f24Pts
+          });
+        }
+
+        // F-25: CUSUM Change Point Detection
+        if (cusum && cusum.changePoints.length > 0) {
+          const decreases = cusum.changePoints.filter(cp => cp.type === 'decrease');
+          let f25Sev = 'MEDIUM', f25Pts = 5;
+          if (decreases.length > 0) { f25Sev = 'HIGH'; f25Pts = 8; }
+          findings.push({
+            id: 'F-25', name: 'CUSUM Change Point Detected', severity: f25Sev,
+            value: `${cusum.changePoints.length} shift(s): ${cusum.changePoints.map(cp => cp.month + ' (' + cp.type + ')').join(', ')}`,
+            threshold: 'Any statistically significant consumption shift',
+            description: `CUSUM (Cumulative Sum) statistical process control detected ${cusum.changePoints.length} significant change point(s) in the monthly consumption series (mean: ${formatNum(cusum.mean, 0)} kWh, σ: ${formatNum(cusum.stddev, 0)} kWh, threshold: ${formatNum(cusum.threshold, 0)} kWh). ${decreases.length > 0 ? `Downward shifts detected at: ${decreases.map(d => d.month).join(', ')}. A sudden sustained decrease is the hallmark of theft onset — the moment when a bypass device was installed or CT ratio was changed.` : 'Only upward shifts detected — may indicate legitimate load growth.'} CUSUM is used by EPRI (Electric Power Research Institute, USA) and European utilities as the gold standard for non-invasive theft detection. It pinpoints the exact billing cycle when the anomaly began, which is critical for back-billing calculation.`,
+            recommendation: decreases.length > 0
+              ? '■ The downward change point at ' + decreases[0].month + ' is the probable theft onset date. ■ Back-billing should be calculated from this date. ■ Review what changed around this date: new programming events? Tamper events? ■ Compare with consumer\'s business records — any legitimate reason for reduced consumption? ■ If no legitimate explanation: use this as the theft start date in the assessment report under Electricity Act Section 126.'
+              : '■ Upward shifts may indicate load growth (legitimate) or recovery from a previous bypass removal. ■ Cross-check with connected load declaration updates. ■ Monitor for subsequent downward shifts.',
+            points: f25Pts
+          });
+        }
+
+        // F-26: Load Entropy Anomaly
+        if (loadEntropy && loadEntropy.isLowEntropy) {
+          findings.push({
+            id: 'F-26', name: 'Low Load Profile Entropy', severity: 'MEDIUM',
+            value: `Normalized entropy: ${loadEntropy.normalizedEntropy.toFixed(3)} (threshold: 0.65)`,
+            threshold: 'Normalized entropy < 0.65',
+            description: `Shannon entropy analysis of the load profile shows abnormally low entropy (${loadEntropy.normalizedEntropy.toFixed(3)} on a 0–1 scale, where 1 = perfectly uniform distribution). Low entropy means the consumption data is more "predictable" or "flat" than expected. Raw entropy: ${loadEntropy.entropy.toFixed(2)} bits vs maximum possible: ${loadEntropy.maxEntropy.toFixed(2)} bits. Legitimate consumers have characteristic load signatures with natural variation (entropy 0.70–0.90). Low entropy can indicate: (1) A bypass device creating unnatural flat-zero periods, (2) Data fabrication where intervals are filled with repeated values, (3) Meter recording artifacts. This technique is used in machine learning-based NTL (Non-Technical Loss) detection systems deployed by Enel (Italy), CPFL (Brazil), and Endesa (Spain).`,
+            recommendation: '■ Examine the load profile visually for flat/constant periods that look artificial. ■ Check if zero-consumption intervals are unnaturally uniform (real power failures cause gradually decreasing then zero, not instant cutoff). ■ Compare entropy with other meters on the same feeder — significantly lower entropy on this meter vs neighbors is suspicious. ■ Can be used as supporting evidence but not standalone proof.',
+            points: 5
+          });
+        }
+
+        // F-27: Weekday/Weekend Ratio Anomaly
+        if (weekdayWeekend && weekdayWeekend.weekendDays > 3 && weekdayWeekend.weekdayDays > 5) {
+          const ratio = weekdayWeekend.ratio;
+          // Only flag if weekend is much higher (possible weekend-only bypass off) or much lower (possible bypass active on weekends)
+          if (ratio > 1.3 || ratio < 0.3) {
+            const f27Sev = ratio < 0.3 ? 'MEDIUM' : 'LOW';
+            findings.push({
+              id: 'F-27', name: 'Weekday/Weekend Pattern Anomaly', severity: f27Sev,
+              value: `Weekend/Weekday ratio: ${ratio.toFixed(2)} (Avg weekday: ${formatNum(weekdayWeekend.avgWeekday, 1)} kWh, Avg weekend: ${formatNum(weekdayWeekend.avgWeekend, 1)} kWh)`,
+              threshold: 'Ratio > 1.3 or < 0.3',
+              description: `Weekend consumption is ${ratio > 1 ? (ratio * 100 - 100).toFixed(0) + '% HIGHER' : (100 - ratio * 100).toFixed(0) + '% LOWER'} than weekday consumption. Average weekday: ${formatNum(weekdayWeekend.avgWeekday, 1)} kWh/day (${weekdayWeekend.weekdayDays} days), Average weekend: ${formatNum(weekdayWeekend.avgWeekend, 1)} kWh/day (${weekdayWeekend.weekendDays} days). ${ratio < 0.3 ? 'Very low weekend consumption with normal weekday load may indicate a bypass that is only deactivated on working days (consumer turns off bypass for weekends to avoid detection during off-hours inspections).' : 'Higher weekend than weekday consumption is unusual for commercial/industrial consumers — may indicate unauthorized usage or a bypass that is active only on weekdays to reduce detection risk.'}`,
+              recommendation: ratio < 0.3
+                ? '■ Cross-check with the consumer\'s declared business hours. ■ If they claim 24/7 operation but weekends show 70%+ less consumption → bypass likely deactivated on weekends. ■ Schedule surprise weekend inspection. ■ Compare weekend load profile shape with weekday — if shape is identical but scaled down, it\'s temperature/activity related (legitimate).'
+                : '■ Verify if consumer has weekend operations not reflected in their contract. ■ Check for unauthorized subletting of premises. ■ If weekend consumption pattern started recently, correlate with other anomaly dates.',
+              points: 3
+            });
+          }
+        }
+
+        // F-28: Autocorrelation Disruption
+        if (autocorrelation && autocorrelation.isDailyWeak) {
+          findings.push({
+            id: 'F-28', name: 'Load Profile Periodicity Disruption', severity: 'MEDIUM',
+            value: `Daily ACF: ${autocorrelation.daily.toFixed(3)}, Weekly ACF: ${autocorrelation.weekly.toFixed(3)}`,
+            threshold: 'Daily ACF < 0.3',
+            description: `Autocorrelation analysis reveals weak 24-hour periodicity (ACF₄₈ = ${autocorrelation.daily.toFixed(3)}, expected 0.4–0.8 for normal consumers). Weekly periodicity: ${autocorrelation.weekly.toFixed(3)}. Adjacent interval correlation: ${autocorrelation.adjacent.toFixed(3)}. Every consumer has a natural daily rhythm — wake up, work, sleep. This creates strong 24-hour autocorrelation in the load profile. When a bypass device intermittently suppresses consumption, it destroys this natural periodicity because the suppression doesn't follow the same daily pattern as legitimate load. This technique is used in academic NTL detection research (IEEE/IET publications) and by advanced analytics platforms (Itron, Landis+Gyr Analytics).`,
+            recommendation: '■ Compare this meter\'s autocorrelation with neighboring meters on the same feeder. ■ If neighbors show ACF > 0.5 but this meter < 0.3 → strong evidence of intermittent bypass. ■ Examine which hours contribute most to periodicity loss. ■ Can be combined with CUSUM to determine when periodicity was disrupted.',
+            points: 5
+          });
+        }
+
+        // F-29: Current–Power Decoupling
+        if (currentPowerCorr && (currentPowerCorr.anomalyPct > 3 || currentPowerCorr.isWeak)) {
+          let f29Sev = 'MEDIUM', f29Pts = 6;
+          if (currentPowerCorr.anomalyPct > 10) { f29Sev = 'CRITICAL'; f29Pts = 15; }
+          else if (currentPowerCorr.anomalyPct > 5) { f29Sev = 'HIGH'; f29Pts = 10; }
+          findings.push({
+            id: 'F-29', name: 'Current–Power Decoupling', severity: f29Sev,
+            value: `${currentPowerCorr.anomalyPct.toFixed(1)}% intervals, correlation: ${currentPowerCorr.correlation.toFixed(3)}`,
+            threshold: 'CRITICAL > 10% anomalous intervals',
+            description: `In ${currentPowerCorr.anomalous} of ${currentPowerCorr.total} load-carrying intervals (${currentPowerCorr.anomalyPct.toFixed(1)}%), significant current was flowing (>1A total) but kWh recorded was near zero. Pearson correlation between total current and kWh: ${currentPowerCorr.correlation.toFixed(3)} (expected > 0.8 for a properly functioning meter). This is arguably the single most definitive non-invasive theft indicator. In a properly connected meter, current flow MUST produce proportional energy measurement. If current flows through the CT but the energy register doesn't increment, it means: (1) The CT secondary is shorted (current measured by sensor but bypassed for metering), (2) The voltage reference is disconnected (no voltage = no calculated power even with current), or (3) The meter's energy computation module is compromised.`,
+            recommendation: '■ HIGHEST PRIORITY: Current flowing without power being recorded is near-conclusive evidence of CT bypass or PT disconnection. ■ Cross-verify: if Vr/Vy/Vb are also zero during these intervals → PT disconnection. ■ If voltages are normal but power is zero → CT secondary short-circuit. ■ Schedule immediate inspection with clamp meter to verify current-power relationship on-site. ■ This finding alone justifies a theft investigation.',
+            points: f29Pts
+          });
+        }
+
+        // F-30: Billing Cycle Irregularity
+        if (billingRegularity && (billingRegularity.shortCycles.length > 0 || billingRegularity.longCycles.length > 2)) {
+          const shorts = billingRegularity.shortCycles;
+          const longs = billingRegularity.longCycles;
+          findings.push({
+            id: 'F-30', name: 'Billing Cycle Irregularity', severity: 'LOW',
+            value: `Avg: ${billingRegularity.avgDays.toFixed(0)} days, ${shorts.length} short (<25d), ${longs.length} long (>35d)`,
+            threshold: 'Any cycle < 25 days or > 3 cycles > 35 days',
+            description: `Billing cycles should be approximately 30 days (±3 days). Average cycle length: ${billingRegularity.avgDays.toFixed(1)} days. ${shorts.length > 0 ? `Short cycles (< 25 days): ${shorts.map(s => s.label + ' (' + s.days.toFixed(0) + 'd)').join(', ')}. Short billing cycles can indicate premature billing reads to reduce the consumption captured in high-usage periods.` : ''} ${longs.length > 0 ? `Long cycles (> 35 days): ${longs.map(l => l.label + ' (' + l.days.toFixed(0) + 'd)').join(', ')}. Long cycles might indicate skipped reads or billing system issues.` : ''} While often caused by DISCOM scheduling issues, irregular cycles should be cross-referenced with consumption anomalies.`,
+            recommendation: '■ Verify billing read dates against meter reader route records. ■ Check if short cycles correlate with lower kWh (less time = less consumption). ■ Confirm long cycles weren\'t caused by system delays. ■ Irregular cycles are usually DISCOM-side issues but can mask consumption patterns.',
+            points: 2
+          });
+        }
+
+        // F-31: Energy Balance Violation
+        if (energyBalance.length > 0) {
+          let f31Sev = 'MEDIUM', f31Pts = 5;
+          if (energyBalance.length > 3 || energyBalance.some(e => e.deviation > 15)) { f31Sev = 'HIGH'; f31Pts = 8; }
+          const worst = energyBalance.reduce((a, b) => b.deviation > a.deviation ? b : a);
+          findings.push({
+            id: 'F-31', name: 'Energy Balance Violation (kVAh² ≠ kWh² + kVARh²)', severity: f31Sev,
+            value: `${energyBalance.length} months violated, worst: ${worst.deviation.toFixed(1)}% in ${worst.month}`,
+            threshold: 'Deviation > 5% from power triangle identity',
+            description: `The fundamental energy relationship kVAh = √(kWh² + kVARh²) was violated in ${energyBalance.length} billing months. Worst deviation: ${worst.month} where √(${formatNum(worst.kwh, 0)}² + ${formatNum(worst.kvarhLag, 0)}²) = ${formatNum(worst.calculated, 0)} kVAh, but the meter reported ${formatNum(worst.kvah, 0)} kVAh (${worst.deviation.toFixed(1)}% deviation). This relationship is a mathematical identity — it must hold true regardless of load type, PF, or operating conditions. A violation means one or more of the three energy registers (kWh, kVAh, kVARh) is measuring incorrectly. This can be caused by: (1) Selective register manipulation (modifying only kWh but not kVAh), (2) CT/PT errors affecting active and reactive power differently, (3) Measurement module hardware fault.`,
+            recommendation: '■ This is a powerful non-invasive diagnostic. ■ If kVAh is correct but kWh is too low → the active energy measurement path is being tampered (most common theft method). ■ Compare which register is the outlier — the "honest" registers point to what the manipulated one should read. ■ Calculate estimated actual kWh = √(kVAh² - kVARh²) and compare with recorded kWh for each month.',
+            points: f31Pts
+          });
+        }
+
+        // F-32: Impossible Consumption Gradients
+        if (consumptionGradient && consumptionGradient.impossibleJumps > 5) {
+          let f32Sev = 'LOW', f32Pts = 3;
+          if (consumptionGradient.impossibleJumps > 20) { f32Sev = 'MEDIUM'; f32Pts = 5; }
+          findings.push({
+            id: 'F-32', name: 'Impossible Consumption Gradients', severity: f32Sev,
+            value: `${consumptionGradient.impossibleJumps} impossible jumps, max gradient: ${consumptionGradient.maxGradient.toFixed(0)}%`,
+            threshold: '> 5 jumps of ±500% between consecutive intervals',
+            description: `${consumptionGradient.impossibleJumps} consecutive 30-minute intervals showed consumption changes exceeding ±500% (or dropping >90% to near-zero). Average absolute gradient: ${consumptionGradient.avgGradient.toFixed(1)}%. Maximum gradient: ${consumptionGradient.maxGradient.toFixed(0)}%. Physical loads have inertia — motors take time to spin up, heating elements ramp gradually, and processes transition smoothly. Instantaneous jumps from zero to maximum (or vice versa) every few intervals suggest a switch-controlled bypass: ON = consumption flows through meter normally, OFF = consumption diverted through bypass cable.`,
+            recommendation: '■ Map gradient jump timestamps to examine if they follow a pattern (e.g., every evening at 22:00 = timer-controlled). ■ Correlate jumps with phase current data — does current also jump, or only kWh? ■ If current is constant but kWh oscillates → definitive measurement circuit manipulation.',
+            points: f32Pts
+          });
+        }
+
+        return findings;
+      }
+    }
+
+    // ─── SECTION 3: Risk Scorer ─────────────────────────────────────
+
+    function scoreFindings(findings) {
+      let score = 0;
+      const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
+      for (const f of findings) {
+        score += f.points || 0;
+        counts[f.severity] = (counts[f.severity] || 0) + 1;
+      }
+
+      // ─── Multi-Signal Correlation Bonus ───────────────────────
+      // When multiple independent indicators converge, the combined
+      // confidence is higher than any single indicator alone.
+      const hasHighTamper = findings.some(f => f.id === 'F-01' && (f.severity === 'CRITICAL' || f.severity === 'HIGH'));
+      const hasReconMismatch = findings.some(f => f.id === 'F-03' && f.severity !== 'INFO' && f.severity !== 'LOW');
+      const hasNightAnomaly = findings.some(f => f.id === 'F-09' && f.severity !== 'INFO' && f.severity !== 'LOW');
+      const hasPhaseImbalance = findings.some(f => (f.id === 'F-06' || f.id === 'F-17') && f.severity !== 'LOW');
+      const hasMDDrop = findings.some(f => f.id === 'F-11');
+      const hasReverseEnergy = findings.some(f => f.id === 'F-18');
+      const hasConsumptionDrop = findings.some(f => f.id === 'F-15' && f.severity !== 'LOW');
+      const hasProgEvents = findings.some(f => f.id === 'F-07' && (f.severity === 'HIGH' || f.severity === 'MEDIUM'));
+
+      let correlationBonus = 0;
+      const correlations = [];
+
+      // Tamper + Recon Mismatch = very strong
+      if (hasHighTamper && hasReconMismatch) {
+        correlationBonus += 8;
+        correlations.push('High tamper count + billing mismatch confirms active tampering');
+      }
+      // Phase imbalance + Night anomaly = CT bypass with timer
+      if (hasPhaseImbalance && hasNightAnomaly) {
+        correlationBonus += 7;
+        correlations.push('Phase imbalance + night zero-load pattern indicates timed CT bypass');
+      }
+      // Programming events + MD drop = parameter manipulation
+      if (hasProgEvents && hasMDDrop) {
+        correlationBonus += 6;
+        correlations.push('Programming events coinciding with MD drop suggests deliberate parameter change');
+      }
+      // Consumption drop + tamper = theft onset
+      if (hasConsumptionDrop && hasHighTamper) {
+        correlationBonus += 5;
+        correlations.push('Sudden consumption decline correlates with tamper activity — theft likely started at drop point');
+      }
+      // Reverse energy is always critical
+      if (hasReverseEnergy) {
+        correlationBonus += 10;
+        correlations.push('Reverse energy / register rollback is definitive evidence of manipulation');
+      }
+      // 3+ independent moderate+ signals
+      const moderateSignals = [hasHighTamper, hasReconMismatch, hasNightAnomaly, hasPhaseImbalance, hasMDDrop, hasConsumptionDrop, hasProgEvents, hasReverseEnergy].filter(Boolean).length;
+      if (moderateSignals >= 3 && correlationBonus < 10) {
+        correlationBonus += 5;
+        correlations.push(`${moderateSignals} independent anomaly signals detected — convergence increases confidence`);
+      }
+
+      score = Math.min(100, score + correlationBonus);
+
+      let level, levelClass;
+      if (score >= 61) { level = 'CRITICAL RISK'; levelClass = 'critical'; }
+      else if (score >= 41) { level = 'HIGH RISK'; levelClass = 'high'; }
+      else if (score >= 21) { level = 'MEDIUM RISK'; levelClass = 'medium'; }
+      else { level = 'LOW RISK'; levelClass = 'low'; }
+
+      // Top recommendation — prioritize the most actionable
+      const sorted = [...findings].sort((a, b) => {
+        const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
+        return (order[a.severity] ?? 5) - (order[b.severity] ?? 5);
+      });
+      let topRec = 'No immediate action required. Continue routine monitoring.';
+      if (sorted.length > 0 && sorted[0].severity !== 'INFO' && sorted[0].severity !== 'LOW') {
+        topRec = sorted[0].recommendation;
+      }
+
+      // ─── Rich Executive Summary ───────────────────────────────
+      const criticalFindings = findings.filter(f => f.severity === 'CRITICAL');
+      const highFindings = findings.filter(f => f.severity === 'HIGH');
+      const topNames = [...criticalFindings, ...highFindings].map(f => f.name).slice(0, 4);
+      const revLoss = findings.find(f => f.id === 'F-22');
+
+      let summary = '';
+      if (score >= 61) {
+        summary = `<strong>⚠ CRITICAL RISK — Immediate Field Investigation Required</strong><br><br>`;
+        summary += `This meter (risk score: ${score}/100) exhibits <strong>${criticalFindings.length} critical</strong> and <strong>${highFindings.length} high-severity</strong> anomalies that collectively present strong evidence of energy theft or meter tampering.<br><br>`;
+        summary += `<strong>Primary concerns:</strong> ${topNames.join(' ◆ ') || 'Multiple converging anomalies'}.<br><br>`;
+        if (correlations.length > 0) {
+          summary += `<strong>Multi-signal correlation:</strong> ${correlations.join('. ')}.<br><br>`;
+        }
+        if (revLoss) {
+          summary += `<strong>Estimated financial impact:</strong> ${revLoss.value}.<br><br>`;
+        }
+        summary += `<strong>Recommended action:</strong> Deploy inspection team within 24 hours. Conduct physical meter examination, CT/PT wiring verification, and meter memory audit via optical port. Photograph all evidence. If bypass or register manipulation is confirmed, file theft assessment report and initiate back-billing under Section 135/138 of the Electricity Act, 2003.`;
+      } else if (score >= 41) {
+        summary = `<strong>HIGH RISK — Investigation Recommended Within 48 Hours</strong><br><br>`;
+        summary += `This meter (risk score: ${score}/100) shows <strong>${highFindings.length} high-severity</strong> anomalies that warrant investigation. Key concerns: ${topNames.join(', ') || 'anomalous patterns detected'}.<br><br>`;
+        if (correlations.length > 0) {
+          summary += `<strong>Correlated signals:</strong> ${correlations.join('. ')}.<br><br>`;
+        }
+        summary += `<strong>Recommended action:</strong> Schedule physical inspection within 48 hours. Cross-reference findings with field visit records, outage logs, and consumer load declaration before inspection. Prepare CT testing equipment and portable power analyzer for the visit. Document all findings for potential theft proceeding.`;
+      } else if (score >= 21) {
+        summary = `<strong>MODERATE RISK — Monitoring Required</strong><br><br>`;
+        summary += `This meter (risk score: ${score}/100) shows some anomalous patterns that may have legitimate explanations but should not be ignored — ${counts.MEDIUM} medium-severity findings were detected. `;
+        summary += correlations.length > 0 ? `Notable: ${correlations.join('. ')}.` : 'No strong signal convergence detected.';
+        summary += `<br><br><strong>Recommended action:</strong> Place this meter on the watch list. Re-analyze after the next billing cycle. If anomalies persist or worsen, escalate to physical inspection.`;
+      } else {
+        summary = `<strong>LOW RISK — Routine Monitoring</strong><br><br>`;
+        summary += `This meter (risk score: ${score}/100) shows no significant anomalies. All ${findings.length} analyzed parameters are within expected operational ranges. `;
+        summary += `Continue standard monitoring cycle. Re-analyze if consumption pattern changes significantly or if field complaints are received.`;
+      }
+
+      return { score, level, levelClass, counts, topRec, summary, correlations, correlationBonus };
+    }
+
+    // ─── SECTION 4: Chart Renderer ──────────────────────────────────
+
+    class ChartRenderer {
+      constructor() {
+        this.charts = {};
+        this.defaultFont = { family: "'Inter', system-ui, sans-serif", size: 12, color: '#8b949e' };
+        this.gridColor = 'rgba(48, 54, 61, 0.6)';
+        this.textColor = '#8b949e';
+      }
+
+      destroyAll() {
+        for (const key of Object.keys(this.charts)) {
+          this.charts[key]?.destroy();
+          delete this.charts[key];
+        }
+      }
+
+      baseOptions(extra = {}) {
+        return {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false, labels: { color: this.textColor, font: this.defaultFont } },
+            tooltip: { backgroundColor: '#161b22', titleColor: '#e6edf3', bodyColor: '#8b949e', borderColor: '#30363d', borderWidth: 1, padding: 10, bodyFont: { family: "'JetBrains Mono', monospace", size: 11 } },
+            ...extra.plugins
+          },
+          scales: {
+            x: { ticks: { color: this.textColor, font: { size: 11 } }, grid: { color: this.gridColor }, border: { color: '#30363d' }, ...extra.x },
+            y: { ticks: { color: this.textColor, font: { family: "'JetBrains Mono', monospace", size: 11 } }, grid: { color: this.gridColor }, border: { color: '#30363d' }, ...extra.y },
+            ...extra.scales
+          },
+          ...extra.root
+        };
+      }
+
+      renderMonthlyKWH(monthly) {
+        const ctx = document.getElementById('chart-monthly-kwh');
+        if (!ctx || monthly.length === 0) return;
+        this.charts.monthlyKWH = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: monthly.map(m => m.label),
+            datasets: [{
+              label: 'Monthly kWh',
+              data: monthly.map(m => m.kwh),
+              borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.12)',
+              fill: true, tension: 0.3, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
+            }]
+          },
+          options: this.baseOptions()
+        });
+      }
+
+      renderMaxDemand(monthly) {
+        const ctx = document.getElementById('chart-max-demand');
+        if (!ctx || monthly.length === 0) return;
+        this.charts.maxDemand = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: monthly.map(m => m.label),
+            datasets: [{
+              label: 'Max Demand (kVA)',
+              data: monthly.map(m => m.maxDemandKVA),
+              backgroundColor: 'rgba(63,185,80,0.7)', borderColor: '#3fb950', borderWidth: 1, borderRadius: 4
+            }]
+          },
+          options: this.baseOptions()
+        });
+      }
+
+      renderReconciliation(recon) {
+        const ctx = document.getElementById('chart-reconciliation');
+        if (!ctx || recon.length === 0) return;
+        this.charts.reconciliation = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: recon.map(r => r.label),
+            datasets: [
+              { label: 'Billing Register kWh', data: recon.map(r => r.billingKWH), backgroundColor: 'rgba(88,166,255,0.7)', borderColor: '#58a6ff', borderWidth: 1, borderRadius: 4 },
+              { label: 'Load Survey Sum kWh', data: recon.map(r => r.surveyKWH), backgroundColor: 'rgba(248,81,73,0.7)', borderColor: '#f85149', borderWidth: 1, borderRadius: 4 }
+            ]
+          },
+          options: this.baseOptions({ plugins: { legend: { display: true, labels: { color: '#8b949e' } } } })
+        });
+      }
+
+      renderLoadCurve(lsStats) {
+        const ctx = document.getElementById('chart-load-curve');
+        if (!ctx || lsStats.length === 0) return;
+        // Compute average kWh per 30-min slot
+        const slotTotals = new Array(48).fill(0);
+        const slotCounts = new Array(48).fill(0);
+        for (const s of lsStats) {
+          if (!s.ts) continue;
+          const slot = s.ts.getHours() * 2 + (s.ts.getMinutes() >= 30 ? 1 : 0);
+          slotTotals[slot] += s.kwh;
+          slotCounts[slot]++;
+        }
+        const avgData = slotTotals.map((t, i) => slotCounts[i] > 0 ? t / slotCounts[i] : 0);
+        const labels = Array.from({ length: 48 }, (_, i) => {
+          const h = Math.floor(i / 2).toString().padStart(2, '0');
+          const m = i % 2 === 0 ? '00' : '30';
+          return `${h}:${m}`;
+        });
+
+        const peakIdx = avgData.indexOf(Math.max(...avgData));
+        const offPeakIdx = avgData.indexOf(Math.min(...avgData.filter(v => v > 0)) || 0);
+
+        this.charts.loadCurve = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Avg kWh', data: avgData,
+              borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)',
+              fill: true, tension: 0.3, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2
+            }]
+          },
+          options: this.baseOptions({
+            plugins: {
+              annotation: undefined
+            }
+          })
+        });
+
+        return { avgData, peakIdx, offPeakIdx, labels };
+      }
+
+      renderHeatmap(lsStats) {
+        const container = document.getElementById('heatmap-container');
+        if (!container || lsStats.length === 0) return;
+
+        // Group by day, limit to last 30 days
+        const dayMap = new Map();
+        for (const s of lsStats) {
+          if (!s.ts) continue;
+          const key = s.ts.toISOString().slice(0, 10);
+          if (!dayMap.has(key)) dayMap.set(key, new Array(48).fill(0));
+          const slot = s.ts.getHours() * 2 + (s.ts.getMinutes() >= 30 ? 1 : 0);
+          dayMap.get(key)[slot] += s.kwh;
+        }
+        const days = [...dayMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-30);
+        if (days.length === 0) return;
+
+        const allValues = days.flatMap(([, slots]) => slots);
+        const maxVal = Math.max(...allValues, 0.01);
+
+        let html = '<div class="heatmap-grid">';
+        // Header row
+        html += '<div class="heatmap-header"></div>';
+        for (let i = 0; i < 48; i++) {
+          const label = i % 4 === 0 ? `${Math.floor(i / 2).toString().padStart(2, '0')}` : '';
+          html += `<div class="heatmap-header">${label}</div>`;
+        }
+        // Data rows
+        for (const [date, slots] of days) {
+          html += `<div class="heatmap-row-label">${date.slice(5)}</div>`;
+          for (let i = 0; i < 48; i++) {
+            const intensity = slots[i] / maxVal;
+            const r = Math.round(33 + intensity * (88 - 33));
+            const g = Math.round(38 + intensity * (166 - 38));
+            const b2 = Math.round(45 + intensity * (255 - 45));
+            const bg = `rgb(${r},${g},${b2})`;
+            const h = Math.floor(i / 2).toString().padStart(2, '0');
+            const m = i % 2 === 0 ? '00' : '30';
+            html += `<div class="heatmap-cell" style="background:${bg}" data-tip="${date} ${h}:${m} — ${slots[i].toFixed(2)} kWh"></div>`;
+          }
+        }
+        html += '</div>';
+        html += '<div class="heatmap-legend"><span>Low</span><div class="heatmap-legend-bar"></div><span>High</span></div>';
+        container.innerHTML = html;
+
+        // Tooltip
+        const tooltip = document.getElementById('heatmap-tooltip');
+        container.addEventListener('mouseover', e => {
+          if (e.target.classList.contains('heatmap-cell')) {
+            tooltip.textContent = e.target.dataset.tip;
+            tooltip.classList.add('visible');
+          }
+        });
+        container.addEventListener('mousemove', e => {
+          tooltip.style.left = e.clientX + 12 + 'px';
+          tooltip.style.top = e.clientY - 28 + 'px';
+        });
+        container.addEventListener('mouseout', e => {
+          if (e.target.classList.contains('heatmap-cell')) tooltip.classList.remove('visible');
+        });
+      }
+
+      renderTODDonut(monthly) {
+        const ctx = document.getElementById('chart-tod-donut');
+        if (!ctx || monthly.length === 0) return;
+        const latest = monthly[monthly.length - 1];
+        const data = latest.tod.map(t => t.kwh);
+        const total = data.reduce((s, v) => s + v, 0);
+        const colors = ['#58a6ff','#3fb950','#f85149','#e3b341','#bc8cff','#f778ba','#79c0ff','#d29922'];
+        this.charts.todDonut = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: data.map((_, i) => `TOD${i + 1}`),
+            datasets: [{ data, backgroundColor: colors, borderColor: '#161b22', borderWidth: 2 }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right', labels: { color: '#8b949e', padding: 12 } },
+              tooltip: { backgroundColor: '#161b22', titleColor: '#e6edf3', bodyColor: '#8b949e', borderColor: '#30363d', borderWidth: 1 }
+            },
+            cutout: '60%'
+          },
+          plugins: [{
+            id: 'centerText',
+            afterDraw(chart) {
+              const { ctx: c, chartArea: { left, right, top, bottom } } = chart;
+              const cx = (left + right) / 2;
+              const cy = (top + bottom) / 2;
+              c.save();
+              c.textAlign = 'center'; c.textBaseline = 'middle';
+              c.font = "600 14px 'JetBrains Mono', monospace"; c.fillStyle = '#e6edf3';
+              c.fillText(formatNum(total, 0) + ' kWh', cx, cy);
+              c.restore();
+            }
+          }]
+        });
+      }
+
+      renderTODMonthly(monthly) {
+        const ctx = document.getElementById('chart-tod-monthly');
+        if (!ctx || monthly.length === 0) return;
+        const colors = ['#58a6ff','#3fb950','#f85149','#e3b341','#bc8cff','#f778ba','#79c0ff','#d29922'];
+        const datasets = [];
+        for (let t = 0; t < 8; t++) {
+          datasets.push({
+            label: `TOD${t + 1}`,
+            data: monthly.map(m => m.tod[t].kwh),
+            backgroundColor: colors[t],
+            borderRadius: 2
+          });
+        }
+        this.charts.todMonthly = new Chart(ctx, {
+          type: 'bar',
+          data: { labels: monthly.map(m => m.label), datasets },
+          options: this.baseOptions({
+            plugins: { legend: { display: true, labels: { color: '#8b949e', boxWidth: 12, padding: 8 } } },
+            scales: { x: { stacked: true }, y: { stacked: true } }
+          })
+        });
+      }
+
+      renderPhaseVoltage(lsStats) {
+        const ctx = document.getElementById('chart-phase-voltage');
+        if (!ctx || lsStats.length === 0) return;
+        // Last 7 days
+        const cutoff = new Date(Math.max(...lsStats.filter(s => s.ts).map(s => s.ts.getTime())) - 7 * 86400000);
+        const filtered = lsStats.filter(s => s.ts && s.ts >= cutoff);
+        this.charts.phaseVoltage = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: filtered.map(s => s.ts.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+            datasets: [
+              { label: 'Vr', data: filtered.map(s => s.vr), borderColor: '#f85149', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+              { label: 'Vy', data: filtered.map(s => s.vy), borderColor: '#e3b341', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+              { label: 'Vb', data: filtered.map(s => s.vb), borderColor: '#58a6ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }
+            ]
+          },
+          options: this.baseOptions({ plugins: { legend: { display: true, labels: { color: '#8b949e' } } }, x: { ticks: { maxTicksLimit: 12 } } })
+        });
+      }
+
+      renderPhaseCurrent(lsStats) {
+        const ctx = document.getElementById('chart-phase-current');
+        if (!ctx || lsStats.length === 0) return;
+        const cutoff = new Date(Math.max(...lsStats.filter(s => s.ts).map(s => s.ts.getTime())) - 7 * 86400000);
+        const filtered = lsStats.filter(s => s.ts && s.ts >= cutoff);
+        this.charts.phaseCurrent = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: filtered.map(s => s.ts.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+            datasets: [
+              { label: 'Ir', data: filtered.map(s => s.ir), borderColor: '#f85149', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+              { label: 'Iy', data: filtered.map(s => s.iy), borderColor: '#e3b341', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+              { label: 'Ib', data: filtered.map(s => s.ib), borderColor: '#58a6ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }
+            ]
+          },
+          options: this.baseOptions({ plugins: { legend: { display: true, labels: { color: '#8b949e' } } }, x: { ticks: { maxTicksLimit: 12 } } })
+        });
+      }
+
+      renderImbalance(lsStats) {
+        const ctx = document.getElementById('chart-imbalance');
+        if (!ctx || lsStats.length === 0) return;
+        const valid = lsStats.filter(s => s.ts && s.currentImbalancePct > 0);
+        this.charts.imbalance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: valid.map(s => s.ts.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })),
+            datasets: [{
+              label: 'Imbalance %', data: valid.map(s => s.currentImbalancePct),
+              borderColor: '#e3b341', borderWidth: 1.5, pointRadius: 0, tension: 0.2,
+              fill: false
+            }]
+          },
+          options: this.baseOptions({
+            plugins: {
+              annotation: {
+                annotations: {
+                  warn: { type: 'line', yMin: 15, yMax: 15, borderColor: 'rgba(227,179,65,0.5)', borderDash: [6, 3], borderWidth: 1, label: { content: '15% Warning', display: true, color: '#e3b341', font: { size: 10 } } },
+                  crit: { type: 'line', yMin: 30, yMax: 30, borderColor: 'rgba(248,81,73,0.5)', borderDash: [6, 3], borderWidth: 1, label: { content: '30% Critical', display: true, color: '#f85149', font: { size: 10 } } }
+                }
+              }
+            },
+            x: { ticks: { maxTicksLimit: 12 } }
+          })
+        });
+      }
+
+      renderPFTrend(monthly) {
+        const ctx = document.getElementById('chart-pf-trend');
+        if (!ctx || monthly.length === 0) return;
+        this.charts.pfTrend = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: monthly.map(m => m.label),
+            datasets: [{
+              label: 'Power Factor', data: monthly.map(m => m.pf),
+              borderColor: '#3fb950', borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
+              fill: false, tension: 0.3
+            }]
+          },
+          options: this.baseOptions({ y: { min: 0, max: 1, ticks: { stepSize: 0.1 } } })
+        });
+      }
+
+      renderAll(report) {
+        this.destroyAll();
+        if (report.hasBilling) {
+          this.renderMonthlyKWH(report.monthly);
+          this.renderMaxDemand(report.monthly);
+          this.renderTODDonut(report.monthly);
+          this.renderTODMonthly(report.monthly);
+          this.renderPFTrend(report.monthly);
+        }
+        if (report.reconciliation.length > 0) this.renderReconciliation(report.reconciliation);
+        if (report.hasLoadSurvey) {
+          const curveInfo = this.renderLoadCurve(report.lsStats);
+          this.renderHeatmap(report.lsStats);
+          this.renderPhaseVoltage(report.lsStats);
+          this.renderPhaseCurrent(report.lsStats);
+          this.renderImbalance(report.lsStats);
+          return curveInfo;
+        }
+        return null;
+      }
+    }
+
+    // ─── SECTION 5: UI Renderer ─────────────────────────────────────
+
+    class UIRenderer {
+      renderReport(report) {
+        this.renderIdentity(report.identity);
+        this.renderRiskBanner(report.risk);
+        this.renderKPIs(report);
+        this.renderTheftTab(report);
+        this.renderBillingTab(report);
+        this.renderLoadProfileTab(report);
+        this.renderPowerQualityTab(report);
+        this.renderTODTab(report);
+        this.renderRawFindingsTab(report);
+      }
+
+      renderIdentity(id) {
+        const el = document.getElementById('meter-identity');
+        const tips = {
+          'Meter Number': 'Unique identification number assigned to this meter by the manufacturer. Used for tracking in the DISCOM AMR database.',
+          'Manufacturer': 'The company that manufactured this meter. Different makes have different firmware behaviors and tamper detection capabilities.',
+          'Firmware': 'Meter firmware version. Some firmware versions have known vulnerabilities. Cross-check with manufacturer advisories.',
+          'PT Ratio': 'Potential Transformer ratio. Converts high voltage (e.g., 11kV) to meter-measurable voltage (e.g., 110V). If PT ratio is programmed wrong, all energy readings are scaled incorrectly. PT Ratio of 1 means direct connection (LT meter).',
+          'CT Ratio': 'Current Transformer ratio. Scales down high current to measurable range. If CT ratio in meter doesn\'t match physical CT, consumption is miscalculated. This is a common theft vector — changing CT ratio in software.',
+          'Integration Period': 'The time window (in minutes) over which Maximum Demand is averaged. Standard is 30 min. Changing this alters MD readings and demand charges.',
+          'Last Visited': 'Date when this meter was last physically visited by a DISCOM field team. Long gaps between visits increase theft opportunity.',
+          'RTC Date': 'Real-Time Clock date from the meter. If RTC is significantly off from actual date, it can cause incorrect TOD slot attribution, affecting time-based tariffs.'
+        };
+        const items = [
+          ['Meter Number', id.meterNumber],
+          ['Manufacturer', id.manufacturer],
+          ['Firmware', id.firmware],
+          ['PT Ratio', id.ptRatio],
+          ['CT Ratio', id.ctRatio],
+          ['Integration Period', id.demandIntegrationPeriod + ' min'],
+          ['Last Visited', id.lastVisited],
+          ['RTC Date', id.rtcDate]
+        ];
+        el.innerHTML = items.map(([label, value]) =>
+          `<div class="identity-item">
+            <span class="identity-label has-tooltip">${label}<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">${tips[label] || ''}</span>
+            </span>
+            <span class="identity-value">${value}</span>
+          </div>`
+        ).join('');
+      }
+
+      renderRiskBanner(risk) {
+        const wrap = document.getElementById('risk-banner-wrap');
+        const pct = risk.score / 100;
+        const dashOffset = 283 - (283 * pct);
+        wrap.innerHTML = `
+          <div class="risk-banner risk-level-${risk.levelClass}">
+            <div class="risk-score-display">
+              <div class="risk-score-circle">
+                <svg class="risk-score-svg" viewBox="0 0 100 100">
+                  <circle class="risk-score-track" cx="50" cy="50" r="45"/>
+                  <circle class="risk-score-fill" cx="50" cy="50" r="45" style="stroke-dashoffset:${dashOffset}"/>
+                </svg>
+                <div class="risk-score-text">
+                  <span class="score-number">${risk.score}</span>
+                  <span class="score-max">/100</span>
+                </div>
+              </div>
+              <div>
+                <div class="risk-label">${risk.level}</div>
+                <div class="risk-badges">
+                  ${risk.counts.CRITICAL ? `<span class="badge badge-critical" role="status" aria-label="${risk.counts.CRITICAL} critical findings">${risk.counts.CRITICAL} Critical</span>` : ''}
+                  ${risk.counts.HIGH ? `<span class="badge badge-high" role="status" aria-label="${risk.counts.HIGH} high findings">${risk.counts.HIGH} High</span>` : ''}
+                  ${risk.counts.MEDIUM ? `<span class="badge badge-medium" role="status" aria-label="${risk.counts.MEDIUM} medium findings">${risk.counts.MEDIUM} Medium</span>` : ''}
+                  ${risk.counts.LOW ? `<span class="badge badge-low" role="status" aria-label="${risk.counts.LOW} low findings">${risk.counts.LOW} Low</span>` : ''}
+                  ${risk.counts.INFO ? `<span class="badge badge-info" role="status" aria-label="${risk.counts.INFO} info findings">${risk.counts.INFO} Info</span>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="risk-recommendation">${risk.topRec}</div>
+          </div>`;
+        // Animate score circle
+        requestAnimationFrame(() => {
+          const fill = wrap.querySelector('.risk-score-fill');
+          if (fill) fill.style.strokeDashoffset = dashOffset;
+        });
+      }
+
+      renderKPIs(report) {
+        const el = document.getElementById('kpi-grid');
+        const latestKWH = report.monthly.length > 0 ? report.monthly[report.monthly.length - 1].kwh : null;
+        const latestLabel = report.monthly.length > 0 ? report.monthly[report.monthly.length - 1].label : '';
+        const pf = report.counters.powerFactor;
+        let pfClass = 'kpi-value--info';
+        if (pf > 0 && pf < 0.85) pfClass = 'kpi-value--critical';
+        else if (pf >= 0.85 && pf < 0.95) pfClass = 'kpi-value--high';
+        else if (pf >= 0.95) pfClass = 'kpi-value--low';
+
+        const tamperClass = report.risk.counts.CRITICAL > 0 ? 'kpi-value--critical kpi-card--critical' : '';
+        const missingClass = report.gaps.totalMissing > 50 ? 'kpi-value--critical kpi-card--critical' : '';
+
+        el.innerHTML = `
+          <div class="kpi-card">
+            <span class="kpi-label has-tooltip">Cumulative kWh<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">Total active energy (kWh) consumed over the meter's entire lifetime. This is the main billing register. It should only increase — any decrease indicates register rollback (theft).</span>
+            </span>
+            <span class="kpi-value kpi-value--info">${formatNum(report.counters.cumulativeKWH, 0)}</span>
+            <span class="kpi-sub">Lifetime consumption</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label has-tooltip">Last Month kWh<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">Energy consumed in the most recent billing cycle, derived from the difference of consecutive cumulative register readings. Compare with previous months for trend analysis.</span>
+            </span>
+            <span class="kpi-value kpi-value--info">${latestKWH != null ? formatNum(latestKWH, 0) : '—'}</span>
+            <span class="kpi-sub">${latestLabel}</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label has-tooltip">Peak Demand<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">Instantaneous apparent power (kVA) at the time of the last meter read. Reflects the real-time load on the meter. Maximum Demand (MD) is the highest 30-min average demand in a billing period — used for demand charges in industrial tariffs.</span>
+            </span>
+            <span class="kpi-value kpi-value--info">${formatNum(report.counters.apparentPower / 1000, 2)}</span>
+            <span class="kpi-sub">kVA (instantaneous)</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label has-tooltip">Power Factor<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">Ratio of active power (kW) to apparent power (kVA). Ranges from 0 to 1. PF > 0.95 = excellent, 0.85–0.95 = acceptable, < 0.85 = poor (attracts penalty). Sudden PF improvements without capacitor installation may indicate CT/PT manipulation.</span>
+            </span>
+            <span class="kpi-value ${pfClass}">${pf > 0 ? pf.toFixed(2) : '—'}</span>
+            <span class="kpi-sub">Instantaneous</span>
+          </div>
+          <div class="kpi-card ${report.counters.tamperCount > 500 ? 'kpi-card--critical' : ''}">
+            <span class="kpi-label has-tooltip">Tamper Events<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">Cumulative count of tamper events logged by the meter since installation. Includes: magnetic interference, cover open, terminal cover open, reverse current, CT open, and voltage unbalance events. A healthy meter in normal conditions logs 0–5 events over its lifetime.</span>
+            </span>
+            <span class="kpi-value ${report.counters.tamperCount > 100 ? 'kpi-value--critical' : 'kpi-value--info'}">${formatNum(report.counters.tamperCount, 0)}</span>
+            <span class="kpi-sub">Lifetime</span>
+          </div>
+          <div class="kpi-card ${report.gaps.totalMissing > 50 ? 'kpi-card--critical' : ''}">
+            <span class="kpi-label has-tooltip">Missing Intervals<svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="metric-tip">Number of missing 30-minute load survey recording intervals. Load survey data should be continuous — each gap represents a period where interval-level consumption data is unavailable. Legitimate gaps correlate with power failures; unexplained gaps may indicate data erasure.</span>
+            </span>
+            <span class="kpi-value ${report.gaps.totalMissing > 50 ? 'kpi-value--critical' : 'kpi-value--info'}">${formatNum(report.gaps.totalMissing, 0)}</span>
+            <span class="kpi-sub">Load survey gaps</span>
+          </div>`;
+      }
+
+      renderTheftTab(report) {
+        // Executive Summary
+        document.getElementById('executive-summary').innerHTML = report.risk.summary;
+
+        // Findings Table — now with expandable description rows
+        const sorted = [...report.findings].sort((a, b) => {
+          const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
+          return (order[a.severity] ?? 5) - (order[b.severity] ?? 5);
+        });
+
+        let tableHTML = `<table class="data-table"><thead><tr>
+          <th>Severity</th><th>ID</th><th>Finding</th><th>Value</th><th>Threshold</th><th>Pts</th>
+        </tr></thead><tbody>`;
+        for (const f of sorted) {
+          tableHTML += `<tr class="finding-row--${f.severity.toLowerCase()} finding-toggle" style="cursor:pointer" data-finding-id="${f.id}">
+            <td><span class="badge badge-${f.severity.toLowerCase()}">${f.severity}</span></td>
+            <td style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-text-faint)">${f.id}</td>
+            <td class="text-col"><strong>${f.name}</strong></td>
+            <td>${f.value}</td>
+            <td class="text-col" style="font-family:var(--font-body);font-size:var(--text-xs)">${f.threshold}</td>
+            <td>${f.points}</td>
+          </tr>
+          <tr class="finding-detail" id="detail-${f.id}" style="display:none">
+            <td colspan="6" style="padding:var(--space-4) var(--space-6);border-left:3px solid var(--color-${f.severity.toLowerCase() === 'info' ? 'info' : f.severity.toLowerCase()});font-family:var(--font-body);font-size:var(--text-sm);line-height:1.7">
+              <div style="margin-bottom:var(--space-3)"><strong style="color:var(--color-text)">Analysis:</strong><br><span style="color:var(--color-text-muted)">${f.description}</span></div>
+              <div><strong style="color:var(--color-text)">Recommended Actions:</strong><br><span style="color:var(--color-text-muted)">${f.recommendation.replace(/■/g, '<br>▸').replace(/^<br>/, '')}</span></div>
+            </td>
+          </tr>`;
+        }
+        tableHTML += '</tbody></table>';
+        tableHTML += '<p style="padding:var(--space-2) var(--space-4);color:var(--color-text-faint);font-size:var(--text-xs)">Click any finding row to expand detailed analysis and recommended actions.</p>';
+        document.getElementById('findings-table-wrap').innerHTML = tableHTML;
+
+        // Bind finding expand/collapse
+        document.querySelectorAll('.finding-toggle').forEach(row => {
+          row.addEventListener('click', () => {
+            const id = row.dataset.findingId;
+            const detail = document.getElementById('detail-' + id);
+            if (detail) {
+              detail.style.display = detail.style.display === 'none' ? 'table-row' : 'none';
+            }
+          });
+        });
+
+        // Anomaly Intervals — top 20 from load survey with highest imbalance
+        if (report.hasLoadSurvey && report.lsStats.length > 0) {
+          const anomalies = [...report.lsStats]
+            .filter(s => s.ts && (s.currentImbalancePct > 15 || s.kwh > 0))
+            .sort((a, b) => b.currentImbalancePct - a.currentImbalancePct)
+            .slice(0, 20);
+
+          let aTable = `<table class="data-table"><thead><tr>
+            <th>Timestamp</th><th>kWh</th><th>Ir (A)</th><th>Iy (A)</th><th>Ib (A)</th><th>Vr</th><th>Vy</th><th>Vb</th><th>Imbalance %</th><th>Flag</th>
+          </tr></thead><tbody>`;
+          for (const a of anomalies) {
+            const flag = a.currentImbalancePct > 30 ? 'CT BYPASS?' : a.currentImbalancePct > 15 ? 'IMBALANCED' : '—';
+            const flagColor = a.currentImbalancePct > 30 ? 'var(--color-critical)' : a.currentImbalancePct > 15 ? 'var(--color-high)' : 'var(--color-text-muted)';
+            aTable += `<tr>
+              <td>${a.ts.toLocaleString('en-IN')}</td>
+              <td>${a.kwh.toFixed(3)}</td><td>${a.ir.toFixed(2)}</td>
+              <td>${a.iy.toFixed(2)}</td><td>${a.ib.toFixed(2)}</td>
+              <td>${a.vr.toFixed(1)}</td><td>${a.vy.toFixed(1)}</td><td>${a.vb.toFixed(1)}</td>
+              <td style="color:${a.currentImbalancePct > 30 ? 'var(--color-critical)' : a.currentImbalancePct > 15 ? 'var(--color-high)' : 'var(--color-text)'}">${a.currentImbalancePct.toFixed(1)}%</td>
+              <td style="color:${flagColor};font-family:var(--font-body);font-weight:600;font-size:var(--text-xs)">${flag}</td>
+            </tr>`;
+          }
+          aTable += '</tbody></table>';
+          document.getElementById('anomaly-intervals-wrap').innerHTML = aTable;
+        } else {
+          document.getElementById('anomaly-intervals-wrap').innerHTML = '<p style="padding:var(--space-4);color:var(--color-text-muted)">No load survey data available for anomaly analysis.</p>';
+        }
+      }
+
+      renderBillingTab(report) {
+        if (!report.hasBilling || report.monthly.length === 0) {
+          document.getElementById('billing-table-wrap').innerHTML = '<p style="padding:var(--space-4);color:var(--color-text-muted)">Insufficient billing data for trend analysis (need at least 2 records).</p>';
+          return;
+        }
+        let html = `<table class="data-table"><thead><tr>
+          <th>Month</th><th>kWh</th><th>kVAh</th><th>Max Demand kVA</th><th>PF</th><th>Load Factor</th><th>CO₂ (kg)</th><th>Δ kWh</th>
+        </tr></thead><tbody>`;
+        for (let i = 0; i < report.monthly.length; i++) {
+          const m = report.monthly[i];
+          const delta = i > 0 ? m.kwh - report.monthly[i - 1].kwh : 0;
+          const deltaColor = delta > 0 ? 'var(--color-critical)' : delta < 0 ? 'var(--color-low)' : 'var(--color-text-muted)';
+          const co2 = m.kwh * 0.716;
+          html += `<tr>
+            <td>${m.label}</td><td>${formatNum(m.kwh, 0)}</td><td>${formatNum(m.kvah, 0)}</td>
+            <td>${formatNum(m.maxDemandKVA, 1)}</td><td>${m.pf.toFixed(2)}</td>
+            <td>${m.loadFactor.toFixed(1)}%</td><td>${formatNum(co2, 1)}</td>
+            <td style="color:${deltaColor}">${i > 0 ? (delta > 0 ? '+' : '') + formatNum(delta, 0) : '—'}</td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('billing-table-wrap').innerHTML = html;
+      }
+
+      renderLoadProfileTab(report) {
+        const el = document.getElementById('load-stats');
+        if (!report.hasLoadSurvey) {
+          el.innerHTML = '<div class="info-banner info-banner--warning"><i data-lucide="alert-triangle" style="width:18px;height:18px;flex-shrink:0;"></i>Load survey data unavailable. Interval-based analyses have been skipped.</div>';
+          lucide.createIcons({ attrs: { class: '' }, nameAttr: 'data-lucide' });
+          return;
+        }
+        const totalKWH = report.lsStats.reduce((s, e) => s + e.kwh, 0);
+        const days = new Set(report.lsStats.filter(s => s.ts).map(s => s.ts.toISOString().slice(0, 10)));
+        const avgDaily = days.size > 0 ? totalKWH / days.size : 0;
+        const peakEntry = report.lsStats.reduce((max, s) => s.kwh > max.kwh ? s : max, report.lsStats[0]);
+
+        el.innerHTML = `
+          <div class="stat-item"><div class="stat-label">Total Intervals</div><div class="stat-value">${formatNum(report.lsStats.length, 0)}</div></div>
+          <div class="stat-item"><div class="stat-label">Days Covered</div><div class="stat-value">${days.size}</div></div>
+          <div class="stat-item"><div class="stat-label">Avg Daily kWh</div><div class="stat-value">${formatNum(avgDaily, 1)}</div></div>
+          <div class="stat-item"><div class="stat-label">Peak Interval</div><div class="stat-value">${peakEntry.kwh.toFixed(3)} kWh</div></div>
+        `;
+      }
+
+      renderPowerQualityTab(report) {
+        const el = document.getElementById('pq-stats');
+        if (!report.hasLoadSurvey) {
+          el.innerHTML = '<div class="info-banner info-banner--warning"><i data-lucide="alert-triangle" style="width:18px;height:18px;flex-shrink:0;"></i>Load survey data unavailable for power quality analysis.</div>';
+          lucide.createIcons({ attrs: { class: '' }, nameAttr: 'data-lucide' });
+          return;
+        }
+        const validV = report.lsStats.filter(s => s.vr > 0);
+        const avgV = validV.length > 0 ? validV.reduce((s, e) => s + (e.vr + e.vy + e.vb) / 3, 0) / validV.length : 0;
+        const avgImb = report.phaseImbalance.total > 0 ? report.phaseImbalance.imbalancedPct : 0;
+
+        el.innerHTML = `
+          <div class="stat-item"><div class="stat-label">Avg Phase Voltage</div><div class="stat-value">${formatNum(avgV, 1)} V</div></div>
+          <div class="stat-item"><div class="stat-label">Current Imbalance</div><div class="stat-value" style="color:${avgImb > 15 ? 'var(--color-critical)' : 'var(--color-text)'}">${avgImb.toFixed(1)}% intervals</div></div>
+          <div class="stat-item"><div class="stat-label">Frequency</div><div class="stat-value">${report.counters.frequency > 0 ? report.counters.frequency.toFixed(2) + ' Hz' : '—'}</div></div>
+          <div class="stat-item"><div class="stat-label">Voltage Deviation</div><div class="stat-value">${report.phaseImbalance.voltageDeviationPct.toFixed(1)}% intervals</div></div>
+        `;
+      }
+
+      renderTODTab(report) {
+        if (!report.hasBilling || report.monthly.length === 0) {
+          document.getElementById('tod-table-wrap').innerHTML = '<p style="padding:var(--space-4);color:var(--color-text-muted)">Insufficient billing data for TOD analysis.</p>';
+          return;
+        }
+        // TOD Summary Table using latest billing data aggregates
+        const latestBilling = report.monthly[report.monthly.length - 1];
+        const totalTOD = latestBilling.tod.reduce((s, t) => s + t.kwh, 0);
+        let html = `<table class="data-table"><thead><tr>
+          <th>TOD Slot</th><th>kWh</th><th>kVAh</th><th>% of Total</th>
+        </tr></thead><tbody>`;
+        for (let i = 0; i < 8; i++) {
+          const t = latestBilling.tod[i];
+          const pct = totalTOD > 0 ? (t.kwh / totalTOD) * 100 : 0;
+          html += `<tr><td>TOD ${i + 1}</td><td>${formatNum(t.kwh, 1)}</td><td>${formatNum(t.kvah, 1)}</td><td>${pct.toFixed(1)}%</td></tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('tod-table-wrap').innerHTML = html;
+
+        // TOD Validation result
+        if (report.todValidation) {
+          const v = report.todValidation;
+          const el = document.getElementById('tod-validation-result');
+          el.classList.remove('hidden');
+          const pass = v.mismatchPct < 2;
+          el.innerHTML = `<div class="info-banner ${pass ? 'info-banner--info' : 'info-banner--warning'}">
+            TOD Sum Validation: Sum of TOD registers = ${formatNum(v.sumTOD, 1)} kWh, Cumulative total = ${formatNum(v.cumulativeKWH, 1)} kWh — Mismatch: ${v.mismatchPct.toFixed(2)}%
+            ${pass ? '✓ Within tolerance' : '⚠ Exceeds 2% threshold'}
+          </div>`;
+        }
+      }
+
+      renderRawFindingsTab(report) {
+        const container = document.getElementById('raw-findings-container');
+        const sections = {
+          'Risk Score & Correlation': { score: report.risk.score, level: report.risk.level, counts: report.risk.counts, correlationBonus: report.risk.correlationBonus, correlations: report.risk.correlations },
+          'All Findings': report.findings,
+          'Monthly Billing': report.monthly.map(m => ({ label: m.label, kwh: m.kwh, kvah: m.kvah, maxDemandKVA: m.maxDemandKVA, pf: m.pf, loadFactor: m.loadFactor })),
+          'Counters': report.counters,
+          'Reconciliation': report.reconciliation,
+          'Load Gaps': report.gaps,
+          'Night Anomalies': report.nightAnomaly,
+          'Phase Imbalance': { imbalancedPct: report.phaseImbalance.imbalancedPct, voltageDeviationPct: report.phaseImbalance.voltageDeviationPct, total: report.phaseImbalance.total, severe: report.phaseImbalance.severe },
+          'Single Phase Operation': report.singlePhaseOp,
+          'Reverse Energy': report.reverseEnergy,
+          'Consumption Drops': report.consumptionDrop,
+          'Zero Consumption Periods': report.zeroConsumption,
+          'kVAh/kWh Ratio': report.kvahKwhRatio,
+          'Consumption Volatility': report.consumptionVolatility,
+          'Peak/Off-Peak Ratio': report.peakOffPeakRatio,
+          'Estimated Revenue Loss': report.estimatedRevenueLoss,
+          'Benford\'s Law Analysis': report.benfords,
+          'Power Triangle Verification': report.powerTriangle,
+          'CUSUM Change Detection': report.cusum ? { mean: report.cusum.mean, stddev: report.cusum.stddev, changePoints: report.cusum.changePoints } : null,
+          'Load Entropy': report.loadEntropy ? { entropy: report.loadEntropy.entropy, normalized: report.loadEntropy.normalizedEntropy, isLow: report.loadEntropy.isLowEntropy } : null,
+          'Weekday/Weekend': report.weekdayWeekend,
+          'Autocorrelation': report.autocorrelation,
+          'Current–Power Correlation': report.currentPowerCorr ? { anomalyPct: report.currentPowerCorr.anomalyPct, correlation: report.currentPowerCorr.correlation, anomalous: report.currentPowerCorr.anomalous } : null,
+          'Billing Regularity': report.billingRegularity ? { avgDays: report.billingRegularity.avgDays, short: report.billingRegularity.shortCycles.length, long: report.billingRegularity.longCycles.length } : null,
+          'Energy Balance': report.energyBalance,
+          'Consumption Gradient': report.consumptionGradient,
+          'TOD Validation': report.todValidation,
+          'Carbon Footprint': report.carbon
+        };
+
+        container.innerHTML = Object.entries(sections).map(([name, data]) => `
+          <div class="collapsible">
+            <div class="collapsible-header" tabindex="0" role="button" aria-expanded="false">
+              <i data-lucide="chevron-right" class="chevron"></i>
+              ${name}
+            </div>
+            <div class="collapsible-body"><pre class="raw-json">${JSON.stringify(data, null, 2)}</pre></div>
+          </div>
+        `).join('');
+
+        // Bind collapsible toggle
+        container.querySelectorAll('.collapsible-header').forEach(header => {
+          header.addEventListener('click', () => {
+            const parent = header.parentElement;
+            parent.classList.toggle('open');
+            header.setAttribute('aria-expanded', parent.classList.contains('open'));
+          });
+          header.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); header.click(); }
+          });
+        });
+      }
+    }
+
+    // ─── SECTION 6: Report Exporter ─────────────────────────────────
+
+    function exportReport(meterNumber, chartsInstance) {
+      const reportEl = document.getElementById('report-container');
+      const clone = reportEl.cloneNode(true);
+      clone.classList.remove('hidden');
+
+      // Replace canvases with images
+      const canvases = reportEl.querySelectorAll('canvas');
+      const cloneCanvases = clone.querySelectorAll('canvas');
+      canvases.forEach((canvas, i) => {
+        try {
+          const img = document.createElement('img');
+          img.src = canvas.toDataURL('image/png');
+          img.style.width = '100%';
+          img.style.maxHeight = '400px';
+          img.alt = canvas.getAttribute('aria-label') || 'Chart';
+          cloneCanvases[i].replaceWith(img);
+        } catch (e) { /* skip unrenderable */ }
+      });
+
+      // Build full HTML
+      const styles = document.querySelector('style').outerHTML;
+      const fontLink = '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">';
+      const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Meter Report — ${meterNumber}</title>${fontLink}${styles}</head><body style="background:#0f1117;color:#e6edf3;font-family:'Inter',system-ui,sans-serif;padding:2rem;">${clone.outerHTML}</body></html>`;
+
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `meter_${meterNumber}_report_${date}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ─── SECTION 7: App Bootstrap ───────────────────────────────────
+
+    const engine = new MeterAnalysisEngine();
+    const charts = new ChartRenderer();
+    const ui = new UIRenderer();
+
+    const uploadZone = document.getElementById('upload-zone');
+    const reportContainer = document.getElementById('report-container');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const spinner = document.getElementById('upload-spinner');
+    const uploadError = document.getElementById('upload-error');
+
+    function showError(msg) {
+      uploadError.classList.remove('hidden');
+      uploadError.innerHTML = `<div class="error-card"><div class="error-card-title"><i data-lucide="x-circle" style="width:16px;height:16px;"></i> Error</div><div class="error-card-message">${msg}</div></div>`;
+      lucide.createIcons({ attrs: { class: '' }, nameAttr: 'data-lucide' });
+    }
+
+    function hideError() {
+      uploadError.classList.add('hidden');
+      uploadError.innerHTML = '';
+    }
+
+    async function handleFile(file) {
+      hideError();
+      if (!file || !file.name.endsWith('.json')) {
+        showError('Please upload a valid .json file.');
+        return;
+      }
+      spinner.classList.add('active');
+      try {
+        const text = await file.text();
+        let raw;
+        try { raw = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON: ' + e.message); }
+        const data = parseJsonFile(raw);
+        const report = engine.analyze(data);
+
+        // Switch views
+        uploadZone.classList.add('hidden');
+        reportContainer.classList.remove('hidden');
+
+        // Render UI
+        ui.renderReport(report);
+
+        // Render charts (after DOM is visible)
+        requestAnimationFrame(() => {
+          charts.renderAll(report);
+          lucide.createIcons({ attrs: { class: '' }, nameAttr: 'data-lucide' });
+        });
+
+        // Store report reference for export
+        window.__currentReport = report;
+      } catch (e) {
+        showError(e.message || 'Failed to process the meter data file.');
+      } finally {
+        spinner.classList.remove('active');
+      }
+    }
+
+    // Drag-drop handlers
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
+    });
+
+    // Click to browse
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    // New file button
+    document.getElementById('btn-new-file').addEventListener('click', () => {
+      charts.destroyAll();
+      reportContainer.classList.add('hidden');
+      uploadZone.classList.remove('hidden');
+      fileInput.value = '';
+      hideError();
+    });
+
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Download report
+    document.getElementById('btn-download-report').addEventListener('click', () => {
+      const report = window.__currentReport;
+      if (report) exportReport(report.identity.meterNumber, charts);
+    });
+
+    // Copy raw findings
+    document.getElementById('btn-copy-raw').addEventListener('click', () => {
+      const report = window.__currentReport;
+      if (report) {
+        const text = JSON.stringify({ risk: report.risk, findings: report.findings, counters: report.counters, reconciliation: report.reconciliation, gaps: report.gaps, carbon: report.carbon }, null, 2);
+        navigator.clipboard.writeText(text).then(() => {
+          const btn = document.getElementById('btn-copy-raw');
+          btn.textContent = '✓ Copied';
+          setTimeout(() => { btn.innerHTML = '<i data-lucide="clipboard-copy" style="width:14px;height:14px;"></i> Copy All'; lucide.createIcons(); }, 2000);
+        });
+      }
+    });
+
+    // Init icons
+    lucide.createIcons();
+
+  </script>
+</body>
+</html>
